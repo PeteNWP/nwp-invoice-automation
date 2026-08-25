@@ -1,0 +1,100 @@
+@using System.Globalization
+@model IReadOnlyList<Nwp.InvoiceAutomation.Web.Models.CapturedDocument>
+
+@functions {
+    static (string css, string label) TypeBadge(DocumentType t) => t switch
+    {
+        DocumentType.Invoice => ("doc-invoice", "Invoice"),
+        DocumentType.Statement => ("doc-statement", "Statement"),
+        DocumentType.OrderAcknowledgement => ("doc-ack", "Order Ack"),
+        DocumentType.EnsCustomsSecurity => ("doc-ens", "ENS / Customs"),
+        DocumentType.Other => ("doc-other", "Other"),
+        _ => ("doc-unknown", "Unknown")
+    };
+
+    static (string css, string label) StatusBadge(ClassificationStatus s) => s switch
+    {
+        ClassificationStatus.Exception => ("flag-exception", "Exception"),
+        ClassificationStatus.Ignored => ("flag-ignored", "Ignored"),
+        ClassificationStatus.Classified => ("flag-classified", "Classified"),
+        _ => ("flag-late", "Unclassified")
+    };
+}
+
+@if (!Model.Any())
+{
+    <div class="card empty-state">
+        <p class="muted">Nothing here yet.</p>
+    </div>
+}
+else
+{
+    <div class="card approval-card">
+        <table class="doc-table">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Subject</th>
+                    <th>Supplier</th>
+                    <th>Invoice / Ref</th>
+                    <th>Total</th>
+                    <th>Received</th>
+                    <th>Status</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in Model)
+                {
+                    var type = TypeBadge(d.DocumentType);
+                    var status = StatusBadge(d.Status);
+                    <tr>
+                        <td><span class="doc-type-pill @type.css">@type.label</span></td>
+                        <td>
+                            @d.Subject
+                            @if (d.IsNestedEmail)
+                            {
+                                <div class="muted">Nested .eml attachment</div>
+                            }
+                            @if (!string.IsNullOrEmpty(d.ReviewerNote))
+                            {
+                                <div class="reviewer-note">“@d.ReviewerNote”</div>
+                            }
+                        </td>
+                        <td>
+                            @(d.SupplierMasterName ?? d.DetectedSupplier ?? "—")
+                            @if (d.SupplierMasterName is not null && d.DetectedSupplier is not null
+                                && !string.Equals(d.SupplierMasterName, d.DetectedSupplier, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="muted">on document: @d.DetectedSupplier</div>
+                            }
+                        </td>
+                        <td>
+                            @(d.InvoiceNumber ?? "—")
+                            @if (!string.IsNullOrEmpty(d.BatchOrReference))
+                            {
+                                <div class="muted">@d.BatchOrReference</div>
+                            }
+                        </td>
+                        <td>@(d.Total is { } t ? $"{d.Currency} {t.ToString("N2", CultureInfo.InvariantCulture)}" : "—")</td>
+                        <td>
+                            @d.ReceivedDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)
+                            @if (d.LateReceivedFlag)
+                            {
+                                <span class="status-flag flag-late">Late</span>
+                            }
+                        </td>
+                        <td>
+                            <span class="status-flag @status.css">@status.label</span>
+                            @if (!string.IsNullOrEmpty(d.ExceptionReason))
+                            {
+                                <div class="muted">@d.ExceptionReason</div>
+                            }
+                        </td>
+                        <td><a asp-page="/Documents/Detail" asp-route-id="@d.Id">Open</a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

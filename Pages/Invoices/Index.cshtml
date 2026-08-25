@@ -1,0 +1,16 @@
+@page
+@model Nwp.InvoiceAutomation.Web.Pages.Invoices.IndexModel
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Queue</p>
+        <h1>Invoice queue</h1>
+        <p class="muted">Documents classified as supplier invoices and ready to capture. Items needing attention sit in Exceptions until resolved.</p>
+    </div>
+    <div class="approval-summary">
+        <strong>@Model.Documents.Count</strong>
+        <span>invoices</span>
+    </div>
+</div>
+
+<partial name="_DocumentTable" model="Model.Documents" />

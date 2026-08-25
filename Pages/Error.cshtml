@@ -1,0 +1,10 @@
+@page
+@model ErrorModel
+<div class="card">
+    <h1>Something went wrong</h1>
+    @if (Model.ShowRequestId)
+    {
+        <p class="muted">Request ID: <code>@Model.RequestId</code></p>
+    }
+    <p>An unexpected error occurred while processing your request.</p>
+</div>

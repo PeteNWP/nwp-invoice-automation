@@ -1,0 +1,16 @@
+@page
+@model Nwp.InvoiceAutomation.Web.Pages.Ignored.IndexModel
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Queue</p>
+        <h1>Ignored / non-invoice</h1>
+        <p class="muted">Deliberately not printed or captured as invoices — order acknowledgements, ENS/customs/security documents and similar. Kept for traceability, out of the invoice workflow.</p>
+    </div>
+    <div class="approval-summary">
+        <strong>@Model.Documents.Count</strong>
+        <span>ignored</span>
+    </div>
+</div>
+
+<partial name="_DocumentTable" model="Model.Documents" />

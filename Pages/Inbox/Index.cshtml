@@ -1,0 +1,16 @@
+@page
+@model Nwp.InvoiceAutomation.Web.Pages.Inbox.IndexModel
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Capture</p>
+        <h1>Inbox classifier</h1>
+        <p class="muted">Everything captured from the invoice mailbox. The first pass classifies each item — invoice, statement, order acknowledgement, ENS/customs, or unknown — before anything is printed or extracted.</p>
+    </div>
+    <div class="approval-summary">
+        <strong>@Model.Documents.Count</strong>
+        <span>captured</span>
+    </div>
+</div>
+
+<partial name="_DocumentTable" model="Model.Documents" />

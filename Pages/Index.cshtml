@@ -1,0 +1,48 @@
+@page
+@model IndexModel
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">NWP Invoice Automation</p>
+        <h1>Capture dashboard</h1>
+        <p class="muted">Shell app with mock data seeded from the 9 real discovery examples. Rules extract, validations protect, humans approve exceptions.</p>
+    </div>
+</div>
+
+<div class="dashboard-tiles">
+    <a class="dashboard-tile" asp-page="/Inbox/Index">
+        <strong>@Model.Total</strong>
+        <span>Inbox — all captured</span>
+    </a>
+    <a class="dashboard-tile" asp-page="/Invoices/Index">
+        <strong>@Model.Invoices</strong>
+        <span>Invoice Queue</span>
+    </a>
+    <a class="dashboard-tile" asp-page="/Statements/Index">
+        <strong>@Model.Statements</strong>
+        <span>Statements</span>
+    </a>
+    <a class="dashboard-tile" asp-page="/Exceptions/Index">
+        <strong>@Model.Exceptions</strong>
+        <span>Exceptions</span>
+    </a>
+    <a class="dashboard-tile" asp-page="/Ignored/Index">
+        <strong>@Model.Ignored</strong>
+        <span>Ignored / non-invoice</span>
+    </a>
+    <a class="dashboard-tile" asp-page="/Suppliers/Index">
+        <strong>@Model.Suppliers</strong>
+        <span>Supplier profiles</span>
+    </a>
+</div>
+
+<div class="card">
+    <h2>What this milestone covers</h2>
+    <ul>
+        <li>NWP-style layout and navigation, shared with the Ordering App.</li>
+        <li>Mock <strong>Inbox classifier</strong> seeded with the 9 forwarded example categories.</li>
+        <li>Working queues: Invoice Queue, Statements, Exceptions, Ignored.</li>
+        <li>Supplier profile placeholders for the supplier-learning system.</li>
+    </ul>
+    <p class="muted">Next: replace mock data with real mailbox capture and deterministic PDF/Excel/email parsing, one supplier at a time.</p>
+</div>

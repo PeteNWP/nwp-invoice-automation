@@ -1,0 +1,64 @@
+@page
+@model Nwp.InvoiceAutomation.Web.Pages.Suppliers.IndexModel
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Admin</p>
+        <h1>Supplier profiles</h1>
+        <p class="muted">Placeholders for the supplier-learning system. Each profile will hold extraction rules, aliases, known senders, ownership and a layout fingerprint. No rules are taught yet.</p>
+    </div>
+    <div class="approval-summary">
+        <strong>@Model.Profiles.Count</strong>
+        <span>suppliers</span>
+    </div>
+</div>
+
+@if (!Model.Profiles.Any())
+{
+    <div class="card empty-state"><p class="muted">No supplier profiles yet.</p></div>
+}
+else
+{
+    <div class="card approval-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Master name</th>
+                    <th>Aliases</th>
+                    <th>Usual file type</th>
+                    <th>Owner / routing</th>
+                    <th>Rules</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Model.Profiles)
+                {
+                    <tr>
+                        <td><strong>@p.MasterName</strong></td>
+                        <td>@(p.Aliases.Any() ? string.Join(", ", p.Aliases) : "—")</td>
+                        <td>@(p.UsualFileType ?? "—")</td>
+                        <td>
+                            @(p.WorkflowOwner ?? "Maeve — standard queue")
+                            @if (p.SendsNestedEmail)
+                            {
+                                <div class="muted">Sends nested .eml invoices</div>
+                            }
+                        </td>
+                        <td>
+                            @if (p.HasExtractionRules)
+                            {
+                                <span class="status-flag flag-classified">Taught</span>
+                            }
+                            else
+                            {
+                                <span class="status-flag flag-late">Capture only</span>
+                            }
+                        </td>
+                        <td class="muted">@(p.Notes ?? "")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

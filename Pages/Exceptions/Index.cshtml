@@ -1,0 +1,16 @@
+@page
+@model Nwp.InvoiceAutomation.Web.Pages.Exceptions.IndexModel
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Queue</p>
+        <h1>Exceptions</h1>
+        <p class="muted">Items a rule or validation could not clear on its own — new supplier, changed format, unreadable file, wrong mailbox, nested email, duplicate or mismatch. Humans resolve these.</p>
+    </div>
+    <div class="approval-summary">
+        <strong>@Model.Documents.Count</strong>
+        <span>to resolve</span>
+    </div>
+</div>
+
+<partial name="_DocumentTable" model="Model.Documents" />

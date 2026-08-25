@@ -1,0 +1,23 @@
+{
+  "Auth": {
+    "Enabled": true
+  },
+  "Access": {
+    "AdminEmails": [
+      "peterv@nationwideproduce.com"
+    ]
+  },
+  "AzureAd": {
+    "Instance": "https://login.microsoftonline.com/",
+    "Domain": "nationwideproduce.com",
+    "TenantId": "YOUR_TENANT_ID",
+    "ClientId": "YOUR_CLIENT_ID",
+    "ClientSecret": "YOUR_CLIENT_SECRET",
+    "CallbackPath": "/signin-oidc"
+  },
+  "Sql": {
+    "ConnectionString": "Server=BO-REP;Database=NWPInvoiceDev;TrustServerCertificate=True;",
+    "UserId": "YOUR_SQL_LOGIN",
+    "Password": "YOUR_SQL_PASSWORD"
+  }
+}

@@ -1,0 +1,72 @@
+@page
+@using System.Globalization
+@model Nwp.InvoiceAutomation.Web.Pages.Documents.DetailModel
+
+@if (Model.Document is null)
+{
+    <div class="card empty-state">
+        <h1>Document not found</h1>
+        <p><a asp-page="/Inbox/Index">Back to inbox</a></p>
+    </div>
+}
+else
+{
+    var d = Model.Document;
+    <div class="page-heading">
+        <div>
+            <p class="eyebrow">Document</p>
+            <h1>@(d.InvoiceNumber ?? d.Subject)</h1>
+            <p class="muted">@d.Subject</p>
+        </div>
+    </div>
+
+    <div class="order-workspace">
+        <div class="order-main">
+            <div class="card">
+                <h2>Captured detail</h2>
+                <dl class="detail-grid">
+                    <dt>Document type</dt><dd>@d.DocumentType</dd>
+                    <dt>Status</dt><dd>@d.Status @(string.IsNullOrEmpty(d.ExceptionReason) ? "" : $"— {d.ExceptionReason}")</dd>
+                    <dt>Detected supplier</dt><dd>@(d.DetectedSupplier ?? "—")</dd>
+                    <dt>Supplier (master)</dt><dd>@(d.SupplierMasterName ?? "—")</dd>
+                    <dt>Invoice number</dt><dd>@(d.InvoiceNumber ?? "—")</dd>
+                    <dt>Invoice date</dt><dd>@(d.InvoiceDate?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "—")</dd>
+                    <dt>Batch / reference</dt><dd>@(d.BatchOrReference ?? "—")</dd>
+                    <dt>Total</dt><dd>@(d.Total is { } t ? $"{d.Currency} {t.ToString("N2", CultureInfo.InvariantCulture)}" : "—")</dd>
+                    <dt>Assigned queue</dt><dd>@(d.AssignedQueue ?? "—")</dd>
+                    <dt>Workflow owner</dt><dd>@(d.WorkflowOwner ?? "Maeve — standard queue")</dd>
+                </dl>
+            </div>
+
+            <div class="card">
+                <h2>Email envelope</h2>
+                <dl class="detail-grid">
+                    <dt>Original mailbox</dt><dd>@d.OriginalMailbox</dd>
+                    <dt>Forwarded by</dt><dd>@(d.ForwardedBy ?? "—")</dd>
+                    <dt>Received</dt>
+                    <dd>
+                        @d.ReceivedDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)
+                        @if (d.LateReceivedFlag) { <span class="status-flag flag-late">Late</span> }
+                    </dd>
+                    <dt>Attachment</dt><dd>@d.AttachmentName</dd>
+                    <dt>MIME type</dt><dd>@d.AttachmentMime</dd>
+                    <dt>Nested email</dt><dd>@(d.IsNestedEmail ? "Yes — PDF nested inside an .eml" : "No")</dd>
+                </dl>
+                @if (!string.IsNullOrEmpty(d.ReviewerNote))
+                {
+                    <div class="alert alert-warning"><strong>Reviewer note:</strong> @d.ReviewerNote</div>
+                }
+            </div>
+        </div>
+
+        <aside class="box-preview card">
+            <h2>Document preview</h2>
+            <p class="muted">The original PDF/email will render here beside the extracted fields once capture is real.</p>
+            <div class="empty-state">
+                <p class="muted">@d.AttachmentName</p>
+            </div>
+        </aside>
+    </div>
+
+    <p><a asp-page="/Inbox/Index">← Back to inbox</a></p>
+}

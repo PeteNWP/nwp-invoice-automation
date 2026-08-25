@@ -1,0 +1,52 @@
+@using Microsoft.Extensions.Options
+@inject IOptions<Nwp.InvoiceAutomation.Web.Services.AuthOptions> AuthOptions
+@inject Nwp.InvoiceAutomation.Web.Services.UserAccessService UserAccess
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NWP Invoice Automation</title>
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body>
+<header>
+    <strong>NWP Invoice Automation</strong>
+    <nav>
+        <a asp-page="/Index">Home</a>
+        <a asp-page="/Inbox/Index">Inbox</a>
+        <a asp-page="/Invoices/Index">Invoice Queue</a>
+        <a asp-page="/Statements/Index">Statements</a>
+        <a asp-page="/Exceptions/Index">Exceptions</a>
+        <a asp-page="/Ignored/Index">Ignored</a>
+        @if (!AuthOptions.Value.Enabled || UserAccess.IsAdmin(User))
+        {
+            <a asp-page="/Suppliers/Index">Supplier Profiles</a>
+        }
+    </nav>
+    @if (AuthOptions.Value.Enabled)
+    {
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            <span class="dev-login">Signed in: @(UserAccess.GetEmail(User))@(UserAccess.IsAdmin(User) ? " · Admin" : "")</span>
+            <a class="auth-link" href="/MicrosoftIdentity/Account/SignOut">Sign out</a>
+        }
+        else
+        {
+            <a class="auth-link" href="/MicrosoftIdentity/Account/SignIn">Sign in</a>
+        }
+    }
+    else
+    {
+        <span class="dev-login">Dev login: developer@example.com</span>
+    }
+</header>
+<main>
+    <div class="environment-banner environment-banner-dev" role="status">DEV MODE — testing environment</div>
+    <aside class="page-logo-card" aria-label="Nationwide Produce logo">
+        <img src="~/img/nationwide-produce-logo.jpg" alt="Nationwide Produce PLC" />
+    </aside>
+    @RenderBody()
+</main>
+</body>
+</html>
