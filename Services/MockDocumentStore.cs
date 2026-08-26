@@ -196,6 +196,28 @@ public sealed class MockDocumentStore : IDocumentStore
                 Total = 810.00m,
                 Currency = "GBP",
                 ReviewerNote = "Went to accounts@nationwideproduce.com, not the invoices mailbox."
+            },
+
+            // 10. Bester/Pre-alert document pack — only page 2 of one PDF is the invoice.
+            new()
+            {
+                Subject = "Fw: Pre-Alert PZ26082101 / 125-2420-2463 JAK1369 Bester Trading to Nationwide c/o Morgan Cargo UK",
+                OriginalMailbox = primary,
+                ForwardedBy = "Peter Vlok / Maeve O'Malley",
+                ReceivedDate = new DateOnly(2026, 8, 24),
+                AttachmentName = "JAK1369 Bester-Nationwide.pdf — page 2 only",
+                AttachmentMime = "application/pdf",
+                DocumentType = DocumentType.Invoice,
+                Status = ClassificationStatus.Exception,
+                ExceptionReason = "Invoice is one page inside a multi-document PDF pack; Maeve only needs page 2 of the PDF labelled Bester.",
+                DetectedSupplier = "AfriAg Marketing (PTY) Ltd",
+                SupplierMasterName = "AfriAg Marketing (PTY) Ltd",
+                InvoiceNumber = "FR6425",
+                InvoiceDate = new DateOnly(2026, 8, 21),
+                BatchOrReference = "PO 24645NWE / AWB 125-2420-2463 / Shipment Invoice NP26018",
+                Total = 9474.75m,
+                Currency = "GBP",
+                ReviewerNote = "Invoice to capture is the second page of the Bester PDF. The rest of the document pack is not needed. Lines: Sugar Snap/Mange Tout, 1,467 boxes, total gross weight 2,640.60kg."
             }
         };
     }
