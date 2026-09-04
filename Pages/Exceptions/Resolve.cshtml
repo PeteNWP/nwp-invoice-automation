@@ -1,0 +1,154 @@
+@page "{id:guid}"
+@using System.Globalization
+@model Nwp.InvoiceAutomation.Web.Pages.Exceptions.ResolveModel
+
+@if (Model.Document is null)
+{
+    <div class="card empty-state">
+        <h1>Exception not found</h1>
+        <p><a asp-page="/Exceptions/Index">Back to exceptions</a></p>
+    </div>
+}
+else
+{
+    var d = Model.Document;
+
+    <div class="page-heading">
+        <div>
+            <p class="eyebrow">Resolve exception</p>
+            <h1>@(d.InvoiceNumber ?? d.Subject)</h1>
+            <p class="muted">Correct this document, then choose which rules the system should remember for next time.</p>
+        </div>
+        <div class="approval-summary">
+            <strong>@(d.Status == ClassificationStatus.Exception ? "!" : "✓")</strong>
+            <span>@d.Status</span>
+        </div>
+    </div>
+
+    @if (Model.Saved)
+    {
+        <div class="alert alert-success">
+            <strong>Resolved.</strong> The document has moved to the selected queue and the checked teaching rules have been saved in the mock supplier profile store.
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(d.ExceptionReason))
+    {
+        <div class="alert alert-error"><strong>Why it stopped:</strong> @d.ExceptionReason</div>
+    }
+
+    <div class="exception-resolution-workspace">
+        <section class="card document-preview-panel">
+            <h2>Original document</h2>
+            <dl class="detail-grid compact-detail-grid">
+                <dt>Subject</dt><dd>@d.Subject</dd>
+                <dt>Mailbox</dt><dd>@d.OriginalMailbox</dd>
+                <dt>Forwarded by</dt><dd>@(d.ForwardedBy ?? "—")</dd>
+                <dt>Received</dt><dd>@d.ReceivedDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)</dd>
+                <dt>Attachment</dt><dd>@d.AttachmentName</dd>
+                <dt>MIME</dt><dd>@d.AttachmentMime</dd>
+                <dt>Nested email</dt><dd>@(d.IsNestedEmail ? "Yes" : "No")</dd>
+            </dl>
+
+            <div class="invoice-preview-placeholder">
+                <strong>Invoice/PDF/email preview</strong>
+                <span>@d.AttachmentName</span>
+                <p>The real PDF/email viewer will sit here when mailbox capture and document storage are wired in.</p>
+            </div>
+
+            @if (!string.IsNullOrEmpty(d.ReviewerNote))
+            {
+                <div class="alert alert-warning"><strong>Reviewer note:</strong> @d.ReviewerNote</div>
+            }
+        </section>
+
+        <section class="card correction-panel">
+            <h2>Correct captured fields</h2>
+            <form method="post" class="exception-resolution-form">
+                <div asp-validation-summary="ModelOnly" class="alert alert-error"></div>
+
+                <label>
+                    <span>Supplier master</span>
+                    <input asp-for="Input.SupplierMasterName" list="supplier-master-list" autocomplete="off" />
+                    <datalist id="supplier-master-list">
+                        @foreach (var supplier in Model.Suppliers)
+                        {
+                            <option value="@supplier.MasterName"></option>
+                        }
+                    </datalist>
+                    <span asp-validation-for="Input.SupplierMasterName" class="field-error"></span>
+                    @if (!string.IsNullOrEmpty(d.DetectedSupplier))
+                    {
+                        <small class="muted">Detected on document: @d.DetectedSupplier</small>
+                    }
+                </label>
+
+                <label>
+                    <span>Document type</span>
+                    <select asp-for="Input.DocumentType" asp-items="Html.GetEnumSelectList<DocumentType>()"></select>
+                </label>
+
+                <div class="form-grid-2">
+                    <label>
+                        <span>Invoice number</span>
+                        <input asp-for="Input.InvoiceNumber" />
+                    </label>
+                    <label>
+                        <span>Invoice date</span>
+                        <input asp-for="Input.InvoiceDate" type="date" />
+                    </label>
+                </div>
+
+                <label>
+                    <span>Batch / reference</span>
+                    <input asp-for="Input.BatchOrReference" />
+                </label>
+
+                <div class="form-grid-2">
+                    <label>
+                        <span>Total</span>
+                        <input asp-for="Input.Total" type="number" step="0.01" />
+                    </label>
+                    <label>
+                        <span>Currency</span>
+                        <input asp-for="Input.Currency" />
+                    </label>
+                </div>
+
+                <div class="form-grid-2">
+                    <label>
+                        <span>Move to queue</span>
+                        <select asp-for="Input.AssignedQueue">
+                            <option>Invoice Queue</option>
+                            <option>Statements</option>
+                            <option>Other owner</option>
+                            <option>Ignored</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Workflow owner</span>
+                        <input asp-for="Input.WorkflowOwner" placeholder="Maeve — standard queue" />
+                    </label>
+                </div>
+
+                <fieldset class="teach-fieldset">
+                    <legend>Teach the system for future invoices</legend>
+                    <label class="checkbox-row"><input asp-for="Input.TeachSupplierAlias" /> <span>Save detected name as a supplier alias</span></label>
+                    <label class="checkbox-row"><input asp-for="Input.TeachNestedEmailRule" /> <span>This supplier sends invoice PDFs inside attached .eml files</span></label>
+                    <label class="checkbox-row"><input asp-for="Input.TeachMailboxRoute" /> <span>Remember this mailbox/routing rule for this supplier</span></label>
+                    <label class="checkbox-row"><input asp-for="Input.TeachExtractionPattern" /> <span>Save this extraction pattern/template for this supplier</span></label>
+                </fieldset>
+
+                <label>
+                    <span>Resolution note</span>
+                    <textarea asp-for="Input.ResolutionNote" rows="3"></textarea>
+                </label>
+
+                <div class="resolution-actions">
+                    <button type="submit">Resolve and teach</button>
+                    <a class="secondary-link-button" asp-page="/Exceptions/Index">Back to exceptions</a>
+                </div>
+            </form>
+        </section>
+    </div>
+}

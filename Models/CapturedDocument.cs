@@ -27,20 +27,20 @@ public sealed class CapturedDocument
     public string? ExceptionReason { get; set; }
 
     // --- Supplier / invoice metadata (best-effort at capture time) ---
-    public string? DetectedSupplier { get; init; }
-    public string? SupplierMasterName { get; init; }
-    public string? InvoiceNumber { get; init; }
-    public DateOnly? InvoiceDate { get; init; }
-    public string? BatchOrReference { get; init; }
-    public decimal? Total { get; init; }
-    public string? Currency { get; init; }
+    public string? DetectedSupplier { get; set; }
+    public string? SupplierMasterName { get; set; }
+    public string? InvoiceNumber { get; set; }
+    public DateOnly? InvoiceDate { get; set; }
+    public string? BatchOrReference { get; set; }
+    public decimal? Total { get; set; }
+    public string? Currency { get; set; }
 
     // --- Workflow routing ---
-    public string? AssignedQueue { get; init; }
-    public string? WorkflowOwner { get; init; }
+    public string? AssignedQueue { get; set; }
+    public string? WorkflowOwner { get; set; }
 
     /// <summary>Maeve's note from the forwarded email — high-value training label.</summary>
-    public string? ReviewerNote { get; init; }
+    public string? ReviewerNote { get; set; }
 
     public bool LateReceivedFlag =>
         InvoiceDate is { } inv && (ReceivedDate.DayNumber - inv.DayNumber) > 14;

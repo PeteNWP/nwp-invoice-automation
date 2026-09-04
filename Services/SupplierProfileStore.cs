@@ -47,4 +47,54 @@ public sealed class SupplierProfileStore
     };
 
     public IReadOnlyList<SupplierProfile> All() => _profiles;
+
+    public SupplierProfile? FindByName(string? masterName)
+    {
+        if (string.IsNullOrWhiteSpace(masterName))
+        {
+            return null;
+        }
+
+        return _profiles.FirstOrDefault(p =>
+            string.Equals(p.MasterName, masterName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public void TeachFromResolution(ExceptionResolution resolution, CapturedDocument document)
+    {
+        var profile = FindByName(resolution.SupplierMasterName);
+        if (profile is null)
+        {
+            profile = new SupplierProfile { MasterName = resolution.SupplierMasterName };
+            _profiles.Add(profile);
+        }
+
+        if (resolution.TaughtSupplierAlias
+            && !string.IsNullOrWhiteSpace(document.DetectedSupplier)
+            && !profile.Aliases.Any(a => string.Equals(a, document.DetectedSupplier, StringComparison.OrdinalIgnoreCase)))
+        {
+            profile.Aliases.Add(document.DetectedSupplier);
+        }
+
+        if (resolution.TaughtNestedEmailRule)
+        {
+            profile.SendsNestedEmail = true;
+        }
+
+        if (resolution.TaughtExtractionPattern)
+        {
+            profile.HasExtractionRules = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(resolution.WorkflowOwner))
+        {
+            profile.WorkflowOwner = resolution.WorkflowOwner;
+        }
+
+        if (resolution.TaughtMailboxRoute
+            && !string.IsNullOrWhiteSpace(document.OriginalMailbox)
+            && !profile.KnownMailboxes.Any(m => string.Equals(m, document.OriginalMailbox, StringComparison.OrdinalIgnoreCase)))
+        {
+            profile.KnownMailboxes.Add(document.OriginalMailbox);
+        }
+    }
 }

@@ -91,7 +91,16 @@ else
                                 <div class="muted">@d.ExceptionReason</div>
                             }
                         </td>
-                        <td><a asp-page="/Documents/Detail" asp-route-id="@d.Id">Open</a></td>
+                        <td>
+                            @if (d.Status == ClassificationStatus.Exception)
+                            {
+                                <a asp-page="/Exceptions/Resolve" asp-route-id="@d.Id">Resolve</a>
+                            }
+                            else
+                            {
+                                <a asp-page="/Documents/Detail" asp-route-id="@d.Id">Open</a>
+                            }
+                        </td>
                     </tr>
                 }
             </tbody>

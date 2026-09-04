@@ -17,15 +17,17 @@ public sealed class SupplierProfile
 
     public List<string> KnownSenders { get; init; } = new();
 
+    public List<string> KnownMailboxes { get; init; } = new();
+
     public string? UsualFileType { get; init; }
 
     /// <summary>Who handles this supplier's invoices (null = Maeve's standard print queue).</summary>
-    public string? WorkflowOwner { get; init; }
+    public string? WorkflowOwner { get; set; }
 
-    public bool SendsNestedEmail { get; init; }
+    public bool SendsNestedEmail { get; set; }
 
     /// <summary>True once extraction rules have been taught; false = capture only for now.</summary>
-    public bool HasExtractionRules { get; init; }
+    public bool HasExtractionRules { get; set; }
 
     public string? Notes { get; init; }
 }

@@ -40,6 +40,10 @@ else
                         <td>@(p.UsualFileType ?? "—")</td>
                         <td>
                             @(p.WorkflowOwner ?? "Maeve — standard queue")
+                            @if (p.KnownMailboxes.Any())
+                            {
+                                <div class="muted">Mailboxes: @string.Join(", ", p.KnownMailboxes)</div>
+                            }
                             @if (p.SendsNestedEmail)
                             {
                                 <div class="muted">Sends nested .eml invoices</div>

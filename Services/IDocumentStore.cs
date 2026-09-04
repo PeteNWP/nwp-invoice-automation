@@ -12,4 +12,5 @@ public interface IDocumentStore
     CapturedDocument? Get(Guid id);
     IReadOnlyList<CapturedDocument> ByType(DocumentType type);
     IReadOnlyList<CapturedDocument> ByStatus(ClassificationStatus status);
+    void ResolveException(Guid id, ExceptionResolution resolution);
 }

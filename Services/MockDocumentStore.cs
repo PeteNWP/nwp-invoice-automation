@@ -21,6 +21,30 @@ public sealed class MockDocumentStore : IDocumentStore
     public IReadOnlyList<CapturedDocument> ByStatus(ClassificationStatus status) =>
         _docs.Where(d => d.Status == status).ToList();
 
+    public void ResolveException(Guid id, ExceptionResolution resolution)
+    {
+        var doc = Get(id);
+        if (doc is null)
+        {
+            return;
+        }
+
+        doc.DocumentType = resolution.DocumentType;
+        doc.Status = resolution.AssignedQueue == "Ignored"
+            ? ClassificationStatus.Ignored
+            : ClassificationStatus.Classified;
+        doc.ExceptionReason = null;
+        doc.SupplierMasterName = resolution.SupplierMasterName;
+        doc.InvoiceNumber = resolution.InvoiceNumber;
+        doc.InvoiceDate = resolution.InvoiceDate;
+        doc.BatchOrReference = resolution.BatchOrReference;
+        doc.Total = resolution.Total;
+        doc.Currency = resolution.Currency;
+        doc.AssignedQueue = resolution.AssignedQueue;
+        doc.WorkflowOwner = resolution.WorkflowOwner;
+        doc.ReviewerNote = resolution.ResolutionNote;
+    }
+
     private static List<CapturedDocument> Seed()
     {
         const string primary = "invoices-evesham@nationwideproduce.com";
