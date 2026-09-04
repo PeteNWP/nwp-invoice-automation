@@ -53,8 +53,8 @@ else
             @if (!string.IsNullOrEmpty(d.AttachmentPreviewUrl))
             {
                 <div class="pdf-preview-frame">
-                    <iframe src="@d.AttachmentPreviewUrl" title="Preview of @d.AttachmentName"></iframe>
-                    <p><a href="@d.AttachmentPreviewUrl" target="_blank" rel="noopener">Open original in new tab</a></p>
+                    <iframe src="@Url.Page("/Documents/Preview", new { id = d.Id })" title="Preview of @d.AttachmentName"></iframe>
+                    <p><a href="@Url.Page("/Documents/Preview", new { id = d.Id })" target="_blank" rel="noopener">Open original in new tab</a></p>
                 </div>
             }
             else

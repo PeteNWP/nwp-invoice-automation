@@ -11,7 +11,9 @@ builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, relo
 var authEnabled = builder.Configuration.GetValue<bool>("Auth:Enabled");
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
 builder.Services.Configure<AccessOptions>(builder.Configuration.GetSection("Access"));
+builder.Services.Configure<GraphDocumentOptions>(builder.Configuration.GetSection("GraphDocuments"));
 builder.Services.AddSingleton<UserAccessService>();
+builder.Services.AddHttpClient<IGraphDocumentClient, GraphDocumentClient>();
 
 if (authEnabled)
 {

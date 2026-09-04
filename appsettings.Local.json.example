@@ -19,11 +19,16 @@
     "ConnectionString": "Server=BO-REP;Database=NWPInvoiceDev;TrustServerCertificate=True;",
     "UserId": "YOUR_SQL_LOGIN",
     "Password": "YOUR_SQL_PASSWORD"
-  }
-
-  ,"MockDocuments": {
+  },
+  "GraphDocuments": {
+    "Enabled": true,
+    "TenantId": "YOUR_TENANT_ID",
+    "ClientId": "YOUR_CLIENT_ID",
+    "ClientSecret": "***"
+  },
+  "MockDocuments": {
     "PreviewUrls": {
-      "4840371_1405DigFactuur_V101.pdf": "PASTE_SHAREPOINT_OR_LOCAL_PREVIEW_URL_HERE"
+      "4840371_1405DigFactuur_V101.pdf": "PASTE_SHAREPOINT_FILE_LINK_HERE"
     }
   }
 }
