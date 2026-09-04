@@ -288,3 +288,7 @@ button { background: #1464a5; border: 0; color: white; border-radius: 6px; paddi
 .checkbox-row input { width: auto; margin-top: .22rem; }
 .resolution-actions { display: flex; gap: .55rem; flex-wrap: wrap; align-items: center; }
 @media (max-width: 950px) { .exception-resolution-workspace, .form-grid-2 { grid-template-columns: 1fr; } }
+
+.pdf-preview-frame { margin: 1rem 0; }
+.pdf-preview-frame iframe { width: 100%; min-height: 520px; border: 1px solid #c9d5e3; border-radius: 10px; background: #f8fafc; }
+.pdf-preview-frame p { margin: .45rem 0 0; }

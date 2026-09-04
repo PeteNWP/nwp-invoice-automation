@@ -6,3 +6,7 @@ appsettings.Development.json
 appsettings.Local.json
 
 docker-compose.dev.yml
+
+# Local mock invoice PDFs - do not commit client documents
+wwwroot/mock-documents/*.pdf
+wwwroot/mock-documents/*.eml

@@ -50,11 +50,21 @@ else
                 <dt>Nested email</dt><dd>@(d.IsNestedEmail ? "Yes" : "No")</dd>
             </dl>
 
-            <div class="invoice-preview-placeholder">
-                <strong>Invoice/PDF/email preview</strong>
-                <span>@d.AttachmentName</span>
-                <p>The real PDF/email viewer will sit here when mailbox capture and document storage are wired in.</p>
-            </div>
+            @if (!string.IsNullOrEmpty(d.AttachmentPreviewUrl))
+            {
+                <div class="pdf-preview-frame">
+                    <iframe src="@d.AttachmentPreviewUrl" title="Preview of @d.AttachmentName"></iframe>
+                    <p><a href="@d.AttachmentPreviewUrl" target="_blank" rel="noopener">Open original in new tab</a></p>
+                </div>
+            }
+            else
+            {
+                <div class="invoice-preview-placeholder">
+                    <strong>Invoice/PDF/email preview</strong>
+                    <span>@d.AttachmentName</span>
+                    <p>The real PDF/email viewer will sit here when mailbox capture and document storage are wired in.</p>
+                </div>
+            }
 
             @if (!string.IsNullOrEmpty(d.ReviewerNote))
             {

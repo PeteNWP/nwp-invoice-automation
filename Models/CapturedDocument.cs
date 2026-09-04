@@ -21,6 +21,9 @@ public sealed class CapturedDocument
     public string AttachmentMime { get; init; } = "";
     public bool IsNestedEmail { get; init; }
 
+    /// <summary>Optional local/static URL for previewing the original document in the prototype.</summary>
+    public string? AttachmentPreviewUrl { get; init; }
+
     // --- Classification ---
     public DocumentType DocumentType { get; set; } = DocumentType.Unknown;
     public ClassificationStatus Status { get; set; } = ClassificationStatus.Unclassified;
