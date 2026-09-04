@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Nwp.InvoiceAutomation.Web.Models;
 
 namespace Nwp.InvoiceAutomation.Web.Services;
@@ -9,7 +10,12 @@ namespace Nwp.InvoiceAutomation.Web.Services;
 /// </summary>
 public sealed class MockDocumentStore : IDocumentStore
 {
-    private readonly List<CapturedDocument> _docs = Seed();
+    private readonly List<CapturedDocument> _docs;
+
+    public MockDocumentStore(IConfiguration configuration)
+    {
+        _docs = Seed(configuration);
+    }
 
     public IReadOnlyList<CapturedDocument> All() => _docs;
 
@@ -45,7 +51,10 @@ public sealed class MockDocumentStore : IDocumentStore
         doc.ReviewerNote = resolution.ResolutionNote;
     }
 
-    private static List<CapturedDocument> Seed()
+    private static string PreviewUrl(IConfiguration configuration, string fileName, string fallbackUrl) =>
+        configuration[$"MockDocuments:PreviewUrls:{fileName}"] ?? fallbackUrl;
+
+    private static List<CapturedDocument> Seed(IConfiguration configuration)
     {
         const string primary = "invoices-evesham@nationwideproduce.com";
 
@@ -58,7 +67,7 @@ public sealed class MockDocumentStore : IDocumentStore
                 OriginalMailbox = primary,
                 ReceivedDate = new DateOnly(2026, 8, 18),
                 AttachmentName = "Order Acknowledgement - 0000055137.pdf",
-                AttachmentPreviewUrl = "/mock-documents/Order%20Acknowledgement%20-%200000055137.pdf",
+                AttachmentPreviewUrl = PreviewUrl(configuration, "Order Acknowledgement - 0000055137.pdf", "/mock-documents/Order%20Acknowledgement%20-%200000055137.pdf"),
                 AttachmentMime = "application/pdf",
                 DocumentType = DocumentType.OrderAcknowledgement,
                 Status = ClassificationStatus.Ignored,
@@ -76,7 +85,7 @@ public sealed class MockDocumentStore : IDocumentStore
                 OriginalMailbox = primary,
                 ReceivedDate = new DateOnly(2026, 8, 18),
                 AttachmentName = "4840371_1405DigFactuur_V101.pdf",
-                AttachmentPreviewUrl = "/mock-documents/4840371_1405DigFactuur_V101.pdf",
+                AttachmentPreviewUrl = PreviewUrl(configuration, "4840371_1405DigFactuur_V101.pdf", "/mock-documents/4840371_1405DigFactuur_V101.pdf"),
                 AttachmentMime = "application/octet-stream",
                 DocumentType = DocumentType.Invoice,
                 Status = ClassificationStatus.Exception,
@@ -136,7 +145,7 @@ public sealed class MockDocumentStore : IDocumentStore
                 OriginalMailbox = primary,
                 ReceivedDate = new DateOnly(2026, 8, 18),
                 AttachmentName = "INVOICE 434358.eml (contains QPRINT1#splf.pdf)",
-                AttachmentPreviewUrl = "/mock-documents/QPRINT1%23splf.pdf",
+                AttachmentPreviewUrl = PreviewUrl(configuration, "QPRINT1#splf.pdf", "/mock-documents/QPRINT1%23splf.pdf"),
                 AttachmentMime = "message/rfc822",
                 IsNestedEmail = true,
                 DocumentType = DocumentType.Invoice,
@@ -177,7 +186,7 @@ public sealed class MockDocumentStore : IDocumentStore
                 OriginalMailbox = primary,
                 ReceivedDate = new DateOnly(2026, 8, 18),
                 AttachmentName = "SSD-39502378-20260818-1501.pdf",
-                AttachmentPreviewUrl = "/mock-documents/SSD-39502378-20260818-1501.pdf",
+                AttachmentPreviewUrl = PreviewUrl(configuration, "SSD-39502378-20260818-1501.pdf", "/mock-documents/SSD-39502378-20260818-1501.pdf"),
                 AttachmentMime = "application/pdf",
                 DocumentType = DocumentType.EnsCustomsSecurity,
                 Status = ClassificationStatus.Ignored,
@@ -192,7 +201,7 @@ public sealed class MockDocumentStore : IDocumentStore
                 ForwardedBy = "Lorna",
                 ReceivedDate = new DateOnly(2026, 8, 24),
                 AttachmentName = "NATIONWIDE PRODUCE PLC_Invoice 33330.pdf",
-                AttachmentPreviewUrl = "/mock-documents/NATIONWIDE%20PRODUCE%20PLC_Invoice%2033330.pdf",
+                AttachmentPreviewUrl = PreviewUrl(configuration, "NATIONWIDE PRODUCE PLC_Invoice 33330.pdf", "/mock-documents/NATIONWIDE%20PRODUCE%20PLC_Invoice%2033330.pdf"),
                 AttachmentMime = "application/pdf",
                 DocumentType = DocumentType.Invoice,
                 Status = ClassificationStatus.Classified,
@@ -214,7 +223,7 @@ public sealed class MockDocumentStore : IDocumentStore
                 OriginalMailbox = "accounts@nationwideproduce.com",
                 ReceivedDate = new DateOnly(2026, 8, 18),
                 AttachmentName = "FreshoInvoice#F55011836.pdf",
-                AttachmentPreviewUrl = "/mock-documents/FreshoInvoice%23F55011836.pdf",
+                AttachmentPreviewUrl = PreviewUrl(configuration, "FreshoInvoice#F55011836.pdf", "/mock-documents/FreshoInvoice%23F55011836.pdf"),
                 AttachmentMime = "application/pdf",
                 DocumentType = DocumentType.Invoice,
                 Status = ClassificationStatus.Exception,
@@ -236,7 +245,7 @@ public sealed class MockDocumentStore : IDocumentStore
                 ForwardedBy = "Peter Vlok / Maeve O'Malley",
                 ReceivedDate = new DateOnly(2026, 8, 24),
                 AttachmentName = "JAK1369 Bester-Nationwide.pdf — page 2 only",
-                AttachmentPreviewUrl = "/mock-documents/JAK1369%20Bester-Nationwide.pdf#page=2",
+                AttachmentPreviewUrl = PreviewUrl(configuration, "JAK1369 Bester-Nationwide.pdf", "/mock-documents/JAK1369%20Bester-Nationwide.pdf#page=2"),
                 AttachmentMime = "application/pdf",
                 DocumentType = DocumentType.Invoice,
                 Status = ClassificationStatus.Exception,
