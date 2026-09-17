@@ -292,3 +292,8 @@ button { background: #1464a5; border: 0; color: white; border-radius: 6px; paddi
 .pdf-preview-frame { margin: 1rem 0; }
 .pdf-preview-frame iframe { width: 100%; min-height: 520px; border: 1px solid #c9d5e3; border-radius: 10px; background: #f8fafc; }
 .pdf-preview-frame p { margin: .45rem 0 0; }
+
+/* Benchmark reference page */
+.doc-table-nested { margin: 0.25rem 0; font-size: 0.9em; background: rgba(0,0,0,0.02); }
+.doc-table-nested th { font-weight: 600; }
+.line-excluded { opacity: 0.55; font-style: italic; }

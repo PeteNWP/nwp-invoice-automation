@@ -12,8 +12,10 @@ var authEnabled = builder.Configuration.GetValue<bool>("Auth:Enabled");
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
 builder.Services.Configure<AccessOptions>(builder.Configuration.GetSection("Access"));
 builder.Services.Configure<GraphDocumentOptions>(builder.Configuration.GetSection("GraphDocuments"));
+builder.Services.Configure<BenchmarkGraphOptions>(builder.Configuration.GetSection("BenchmarkGraph"));
 builder.Services.AddSingleton<UserAccessService>();
 builder.Services.AddHttpClient<IGraphDocumentClient, GraphDocumentClient>();
+builder.Services.AddHttpClient();
 
 if (authEnabled)
 {
@@ -54,6 +56,8 @@ builder.Services.AddRazorPages(options =>
 // implementations as real capture and extraction land.
 builder.Services.AddSingleton<IDocumentStore, MockDocumentStore>();
 builder.Services.AddSingleton<SupplierProfileStore>();
+builder.Services.AddSingleton<GraphBenchmarkClient>();
+builder.Services.AddSingleton<BenchmarkStore>();
 
 var app = builder.Build();
 

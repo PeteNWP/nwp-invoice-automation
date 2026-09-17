@@ -1,0 +1,9 @@
+SourceFilename,DocType,Supplier,InvoiceNumber,InvoiceDate,DueDate,Currency,InvoiceTotal,PORef,ValidLineCount,ValidLineSum,Reconciles,Notes
+17.09_Nationwide.pdf,Invoice,Yukon (Pty) Ltd,SI51710,2026-09-16,2026-10-16,GBP,1364.50,25800.NWE/N,4,1364.50,Yes,Page 2 is a Product Pick List (no amounts) + BT9 Temp Logger line has qty but no amount - both excluded by amount filter
+AR_Invoice_69487.pdf,Invoice,Westland Nurseries Ltd,69487,2026-09-14,2026-10-14,GBP,5760.60,,62,5760.60,Yes,3-page invoice with Carry Over line continuation; filename says AR_Invoice not supplier
+AR_Invoice_69488.pdf,Invoice,Westland Nurseries Ltd,69488,2026-09-14,2026-10-14,GBP,5431.44,,41,5431.44,Yes,2-page invoice with Carry Over continuation; 30-day terms
+Ologia-Ltd_Invoice_10626.pdf,Invoice,Ologia Ltd,10626,2026-09-15,2026-09-30,GBP,6187.50,26044NWE,2,6187.50,Yes,Clean single-page invoice
+VIDAfresh_293180.pdf,Invoice,VIDAfresh Ltd,293180,2026-09-15,2026-10-15,GBP,2370.00,25765NWE/N,1,2370.00,Yes,Ignore field labelled Subtotal 300.00 (sum of qty not money); use NET/GROSS
+VIDAfresh_293251.pdf,Invoice,VIDAfresh Ltd,293251,2026-09-16,2026-10-16,GBP,3230.20,25772NWE/N,3,3230.20,Yes,Ignore field labelled Subtotal 368.00 (sum of qty not money); use NET/GROSS
+CHEDPP.HR.2026.0009331.pdf,Reject-Customs-CHEDPP,Frutful Hill DOO (consignor),,2026-09-17,,,,CHEDPP.HR.2026.0009331,,,No,EU CHED-PP plant-health/transit certificate; no payable total; reject type
+DM101D-MSG.NCTS.pdf,Reject-Customs-NCTS,,,2026-09-17,,EUR,,26HR070319036516L5,,,No,NCTS T1 transit accompanying document; no payable total; reject type

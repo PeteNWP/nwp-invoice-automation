@@ -1,0 +1,12 @@
+SourceFilename,InvoiceNumber,LineNo,Description,Quantity,UnitPrice,LineAmount
+17.09_Nationwide.pdf,SI51710,PROD500,Baby Beetroot Purple 6x200g OOA,15,9.50,142.50
+17.09_Nationwide.pdf,SI51710,PROD250,Baby Leeks 6x200g OOA,40,11.10,444.00
+17.09_Nationwide.pdf,SI51710,PROD100,Rainbow Carrots 6x200g OOA,50,11.20,560.00
+17.09_Nationwide.pdf,SI51710,PROD300,Baby Turnips 6x200g OOA,20,10.90,218.00
+17.09_Nationwide.pdf,SI51710,YI-PACK918,BT9 Temp Logger Unit,1,,EXCLUDE-no-amount
+Ologia-Ltd_Invoice_10626.pdf,10626,1,FINE BEANS 1.5,450,6.25,2812.50
+Ologia-Ltd_Invoice_10626.pdf,10626,2,FINE BEANS 10X150,500,6.75,3375.00
+VIDAfresh_293180.pdf,293180,1,5kg Galia x6 (150pp) Cons 66516,300,7.90,2370.00
+VIDAfresh_293251.pdf,293251,1,13kg Brz YHD x9 (70pp) Cons 66541,68,12.65,860.20
+VIDAfresh_293251.pdf,293251,2,5kg Brz Cantaloupe x6 (150pp) DON DAVID Cons 66496,150,7.90,1185.00
+VIDAfresh_293251.pdf,293251,3,5kg Brz Cantaloupe x5 (150pp) CARIBBEAN KIN Cons 66496,150,7.90,1185.00

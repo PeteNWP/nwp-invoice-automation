@@ -1,0 +1,87 @@
+@page
+@model Nwp.InvoiceAutomation.Web.Pages.Benchmark.IndexModel
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Reference</p>
+        <h1>Invoice benchmark</h1>
+        <p class="muted">Human-established ground-truth values for the captured sample documents. Extraction output (AI or deterministic) is scored against this set — it is not live extraction.</p>
+        <p class="muted">Source: <strong>@Model.Source</strong></p>
+    </div>
+    <div class="approval-summary">
+        <strong>@Model.InvoiceCount</strong>
+        <span>invoices · @Model.RejectCount reject-types</span>
+    </div>
+</div>
+
+<table class="doc-table">
+    <thead>
+        <tr>
+            <th>Source file</th>
+            <th>Type</th>
+            <th>Supplier</th>
+            <th>Invoice #</th>
+            <th>Invoice date</th>
+            <th>Due date</th>
+            <th>Ccy</th>
+            <th>Total</th>
+            <th>PO / ref</th>
+            <th>Lines</th>
+            <th>Line sum</th>
+            <th>Reconciles</th>
+            <th>Notes</th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var h in Model.Headers)
+    {
+        <tr>
+            <td>@h.SourceFilename</td>
+            <td>@h.DocType</td>
+            <td>@h.Supplier</td>
+            <td>@h.InvoiceNumber</td>
+            <td>@h.InvoiceDate</td>
+            <td>@h.DueDate</td>
+            <td>@h.Currency</td>
+            <td>@(h.InvoiceTotal?.ToString("N2") ?? "")</td>
+            <td>@h.PORef</td>
+            <td>@(h.ValidLineCount?.ToString() ?? "")</td>
+            <td>@(h.ValidLineSum?.ToString("N2") ?? "")</td>
+            <td>@h.Reconciles</td>
+            <td class="muted">@h.Notes</td>
+        </tr>
+        @{ var lines = Model.LinesFor(h.InvoiceNumber); }
+        @if (lines.Count > 0)
+        {
+            <tr>
+                <td></td>
+                <td colspan="12">
+                    <table class="doc-table doc-table-nested">
+                        <thead>
+                            <tr>
+                                <th>Line</th>
+                                <th>Description</th>
+                                <th>Qty</th>
+                                <th>Unit price</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var l in lines)
+                        {
+                            <tr class="@(l.IsExcluded ? "line-excluded" : null)">
+                                <td>@l.LineNo</td>
+                                <td>@l.Description</td>
+                                <td>@(l.Quantity?.ToString("0.##") ?? "")</td>
+                                <td>@(l.UnitPrice?.ToString("N2") ?? "")</td>
+                                <td>@(l.IsExcluded ? "— excluded (no amount)" : l.LineAmount)</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </td>
+            </tr>
+        }
+    }
+    </tbody>
+</table>

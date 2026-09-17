@@ -30,5 +30,12 @@
     "PreviewUrls": {
       "4840371_1405DigFactuur_V101.pdf": "PASTE_SHAREPOINT_FILE_LINK_HERE"
     }
+  },
+  "BenchmarkGraph": {
+    "Enabled": true,
+    "SiteHostname": "nationwideproduceplc.sharepoint.com",
+    "SitePath": "",
+    "HeadersListId": "997536d7-f254-4e58-bd08-c4e9e051a019",
+    "LinesListId": "823f50ad-2c2f-4b75-a556-1a85f62527a3"
   }
 }
