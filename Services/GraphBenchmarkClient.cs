@@ -37,6 +37,7 @@ public sealed class GraphBenchmarkClient
     {
         var token = await GetAccessTokenAsync(cancellationToken);
         var siteId = await ResolveSiteIdAsync(token, cancellationToken);
+        var columnAliases = await GetColumnAliasesAsync(token, siteId, listId, cancellationToken);
 
         var items = new List<JsonElement>();
         var url = $"https://graph.microsoft.com/v1.0/sites/{siteId}/lists/{listId}/items?$expand=fields&$top=200";
@@ -61,8 +62,22 @@ public sealed class GraphBenchmarkClient
                 {
                     if (item.TryGetProperty("fields", out var fields))
                     {
-                        // Clone so the element survives disposal of the JsonDocument.
-                        items.Add(fields.Clone());
+                        // Graph returns field values under SharePoint's internal column names.
+                        // Add each column's display name as an alias so the benchmark mapper is
+                        // independent of whether a list was created manually or imported.
+                        var values = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(fields.GetRawText())
+                            ?? new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+
+                        foreach (var (internalName, displayName) in columnAliases)
+                        {
+                            if (values.TryGetValue(internalName, out var fieldValue)
+                                && !values.ContainsKey(displayName))
+                            {
+                                values[displayName] = fieldValue.Clone();
+                            }
+                        }
+
+                        items.Add(JsonSerializer.SerializeToElement(values));
                     }
                 }
             }
@@ -71,6 +86,48 @@ public sealed class GraphBenchmarkClient
         }
 
         return items;
+    }
+
+    private async Task<IReadOnlyDictionary<string, string>> GetColumnAliasesAsync(
+        string token,
+        string siteId,
+        string listId,
+        CancellationToken cancellationToken)
+    {
+        var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var url = $"https://graph.microsoft.com/v1.0/sites/{siteId}/lists/{listId}/columns?$select=name,displayName&$top=200";
+
+        while (!string.IsNullOrEmpty(url))
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await Http.SendAsync(request, cancellationToken);
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Graph column read failed: {(int)response.StatusCode} {response.ReasonPhrase}. {json}");
+            }
+
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("value", out var value))
+            {
+                foreach (var column in value.EnumerateArray())
+                {
+                    var name = column.TryGetProperty("name", out var nameElement) ? nameElement.GetString() : null;
+                    var displayName = column.TryGetProperty("displayName", out var displayElement) ? displayElement.GetString() : null;
+                    if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(displayName))
+                    {
+                        aliases[name] = displayName;
+                    }
+                }
+            }
+
+            url = root.TryGetProperty("@odata.nextLink", out var next) ? next.GetString() : null;
+        }
+
+        return aliases;
     }
 
     private async Task<string> ResolveSiteIdAsync(string token, CancellationToken cancellationToken)

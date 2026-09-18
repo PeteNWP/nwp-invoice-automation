@@ -96,30 +96,30 @@ public sealed class BenchmarkStore
 
         _headers = headerFields.Select(f => new BenchmarkHeader
         {
-            SourceFilename = Str(f, "Title", "SourceFilename"),
-            DocType = Str(f, "DocType"),
+            SourceFilename = Str(f, "Title", "SourceFilename", "Source filename", "Source file"),
+            DocType = Str(f, "DocType", "Doc type", "Type"),
             Supplier = Str(f, "Supplier"),
-            InvoiceNumber = Str(f, "InvoiceNumber"),
-            InvoiceDate = DatePart(Str(f, "InvoiceDate")),
-            DueDate = DatePart(Str(f, "DueDate")),
-            Currency = Str(f, "Currency"),
-            InvoiceTotal = Dec(f, "InvoiceTotal"),
-            PORef = Str(f, "PORef"),
-            ValidLineCount = Int(f, "ValidLineCount"),
-            ValidLineSum = Dec(f, "ValidLineSum"),
+            InvoiceNumber = Str(f, "InvoiceNumber", "Invoice number", "Invoice #", "Invoice no"),
+            InvoiceDate = DatePart(Str(f, "InvoiceDate", "Invoice date")),
+            DueDate = DatePart(Str(f, "DueDate", "Due date")),
+            Currency = Str(f, "Currency", "Ccy"),
+            InvoiceTotal = Dec(f, "InvoiceTotal", "Invoice total", "Total"),
+            PORef = Str(f, "PORef", "PO ref", "PO / ref", "PO / reference"),
+            ValidLineCount = Int(f, "ValidLineCount", "Valid line count", "Lines"),
+            ValidLineSum = Dec(f, "ValidLineSum", "Valid line sum", "Line sum"),
             Reconciles = Str(f, "Reconciles"),
             Notes = Str(f, "Notes")
         }).ToList();
 
         _lines = lineFields.Select(f => new BenchmarkLine
         {
-            SourceFilename = Str(f, "Title", "SourceFilename"),
-            InvoiceNumber = Str(f, "InvoiceNumber"),
-            LineNo = Str(f, "LineNo"),
+            SourceFilename = Str(f, "Title", "SourceFilename", "Source filename", "Source file"),
+            InvoiceNumber = Str(f, "InvoiceNumber", "Invoice number", "Invoice #", "Invoice no"),
+            LineNo = Str(f, "LineNo", "Line no", "Line"),
             Description = Str(f, "Description"),
-            Quantity = Dec(f, "Quantity"),
-            UnitPrice = Dec(f, "UnitPrice"),
-            LineAmount = Str(f, "LineAmount")
+            Quantity = Dec(f, "Quantity", "Qty"),
+            UnitPrice = Dec(f, "UnitPrice", "Unit price"),
+            LineAmount = Str(f, "LineAmount", "Line amount", "Amount")
         }).ToList();
     }
 
@@ -127,7 +127,7 @@ public sealed class BenchmarkStore
     {
         foreach (var name in names)
         {
-            if (fields.TryGetProperty(name, out var el))
+            if (TryGetProperty(fields, name, out var el))
             {
                 return el.ValueKind switch
                 {
@@ -142,12 +142,24 @@ public sealed class BenchmarkStore
         return "";
     }
 
-    private static decimal? Dec(JsonElement fields, string name)
+    private static decimal? Dec(JsonElement fields, params string[] names)
     {
-        if (!fields.TryGetProperty(name, out var el))
+        JsonElement el = default;
+        var found = false;
+        foreach (var name in names)
+        {
+            if (TryGetProperty(fields, name, out el))
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
         {
             return null;
         }
+
         return el.ValueKind switch
         {
             JsonValueKind.Number => el.GetDecimal(),
@@ -156,11 +168,35 @@ public sealed class BenchmarkStore
         };
     }
 
-    private static int? Int(JsonElement fields, string name)
+    private static int? Int(JsonElement fields, params string[] names)
     {
-        var d = Dec(fields, name);
+        var d = Dec(fields, names);
         return d.HasValue ? (int)d.Value : null;
     }
+
+    private static bool TryGetProperty(JsonElement fields, string requestedName, out JsonElement value)
+    {
+        if (fields.TryGetProperty(requestedName, out value))
+        {
+            return true;
+        }
+
+        var normalisedRequested = NormaliseColumnName(requestedName);
+        foreach (var property in fields.EnumerateObject())
+        {
+            if (NormaliseColumnName(property.Name) == normalisedRequested)
+            {
+                value = property.Value;
+                return true;
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static string NormaliseColumnName(string value) =>
+        new(value.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 
     /// <summary>SharePoint returns dates as ISO timestamps; keep just the yyyy-MM-dd part.</summary>
     private static string DatePart(string value)
