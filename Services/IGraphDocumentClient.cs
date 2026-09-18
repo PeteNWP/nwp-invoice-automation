@@ -3,6 +3,7 @@ namespace Nwp.InvoiceAutomation.Web.Services;
 public interface IGraphDocumentClient
 {
     Task<GraphDocumentContent> DownloadFromSharingUrlAsync(string sharingUrl, CancellationToken cancellationToken = default);
+    Task<GraphDocumentContent> DownloadDriveItemAsync(string siteId, string driveId, string itemId, string fileName, string? contentType = null, CancellationToken cancellationToken = default);
 }
 
 public sealed class GraphDocumentContent : IDisposable

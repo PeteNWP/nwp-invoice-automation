@@ -11,6 +11,8 @@ public sealed class IndexModel : PageModel
     public IndexModel(IDocumentStore docs) => _docs = docs;
 
     public IReadOnlyList<CapturedDocument> Documents { get; private set; } = Array.Empty<CapturedDocument>();
+    public string Source => _docs.Source;
 
-    public void OnGet() => Documents = _docs.All();
+    public async Task OnGetAsync(CancellationToken cancellationToken) =>
+        Documents = await _docs.AllAsync(cancellationToken);
 }

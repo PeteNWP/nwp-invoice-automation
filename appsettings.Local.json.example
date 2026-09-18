@@ -1,4 +1,12 @@
 {
+  "DocumentSource": "SharePoint",
+  "SharePointInbox": {
+    "SiteHostname": "nationwideproduceplc.sharepoint.com",
+    "SitePath": "",
+    "LibraryName": "Invoice Automation",
+    "FolderPath": "Incoming",
+    "FallbackToMock": false
+  },
   "Auth": {
     "Enabled": true
   },

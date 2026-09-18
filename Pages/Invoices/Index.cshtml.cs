@@ -12,7 +12,7 @@ public sealed class IndexModel : PageModel
 
     public IReadOnlyList<CapturedDocument> Documents { get; private set; } = Array.Empty<CapturedDocument>();
 
-    public void OnGet() => Documents = _docs.All()
+    public async Task OnGetAsync(CancellationToken cancellationToken) => Documents = (await _docs.AllAsync(cancellationToken))
         .Where(d => d.DocumentType == DocumentType.Invoice && d.Status == ClassificationStatus.Classified)
         .ToList();
 }

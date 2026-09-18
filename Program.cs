@@ -52,9 +52,10 @@ builder.Services.AddRazorPages(options =>
     }
 });
 
-// Mock data sources for the shell app. These will be replaced by SQL/mailbox-backed
-// implementations as real capture and extraction land.
-builder.Services.AddSingleton<IDocumentStore, MockDocumentStore>();
+// SharePoint is the live capture source. Mock records remain available as an explicit
+// development source or configured fallback while SQL workflow persistence is built.
+builder.Services.AddSingleton<MockDocumentStore>();
+builder.Services.AddSingleton<IDocumentStore, SharePointDocumentStore>();
 builder.Services.AddSingleton<SupplierProfileStore>();
 builder.Services.AddSingleton<GraphBenchmarkClient>();
 builder.Services.AddSingleton<BenchmarkStore>();

@@ -22,9 +22,9 @@ public sealed class IndexModel : PageModel
     public int Ignored { get; private set; }
     public int Suppliers { get; private set; }
 
-    public void OnGet()
+    public async Task OnGetAsync(CancellationToken cancellationToken)
     {
-        var all = _docs.All();
+        var all = await _docs.AllAsync(cancellationToken);
         Total = all.Count;
         Invoices = all.Count(d => d.DocumentType == DocumentType.Invoice && d.Status == ClassificationStatus.Classified);
         Statements = all.Count(d => d.DocumentType == DocumentType.Statement);

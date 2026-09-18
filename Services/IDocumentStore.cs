@@ -8,9 +8,10 @@ namespace Nwp.InvoiceAutomation.Web.Services;
 /// </summary>
 public interface IDocumentStore
 {
-    IReadOnlyList<CapturedDocument> All();
-    CapturedDocument? Get(Guid id);
-    IReadOnlyList<CapturedDocument> ByType(DocumentType type);
-    IReadOnlyList<CapturedDocument> ByStatus(ClassificationStatus status);
-    void ResolveException(Guid id, ExceptionResolution resolution);
+    string Source { get; }
+    Task<IReadOnlyList<CapturedDocument>> AllAsync(CancellationToken cancellationToken = default);
+    Task<CapturedDocument?> GetAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CapturedDocument>> ByTypeAsync(DocumentType type, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CapturedDocument>> ByStatusAsync(ClassificationStatus status, CancellationToken cancellationToken = default);
+    Task ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken = default);
 }

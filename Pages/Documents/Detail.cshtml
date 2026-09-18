@@ -61,10 +61,17 @@ else
 
         <aside class="box-preview card">
             <h2>Document preview</h2>
-            <p class="muted">The original PDF/email will render here beside the extracted fields once capture is real.</p>
-            <div class="empty-state">
-                <p class="muted">@d.AttachmentName</p>
-            </div>
+            @if (!string.IsNullOrWhiteSpace(d.GraphItemId) || !string.IsNullOrWhiteSpace(d.AttachmentPreviewUrl))
+            {
+                <iframe src="@Url.Page("/Documents/Preview", new { id = d.Id })" title="@d.AttachmentName" style="width:100%; min-height:760px; border:0;"></iframe>
+                <p><a asp-page="/Documents/Preview" asp-route-id="@d.Id" target="_blank" rel="noopener">Open document in a new tab</a></p>
+            }
+            else
+            {
+                <div class="empty-state">
+                    <p class="muted">Preview is not available for @d.AttachmentName.</p>
+                </div>
+            }
         </aside>
     </div>
 

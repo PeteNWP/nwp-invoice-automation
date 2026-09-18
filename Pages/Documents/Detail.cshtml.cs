@@ -13,9 +13,9 @@ public sealed class DetailModel : PageModel
 
     public CapturedDocument? Document { get; private set; }
 
-    public IActionResult OnGet(Guid id)
+    public async Task<IActionResult> OnGetAsync(Guid id, CancellationToken cancellationToken)
     {
-        Document = _docs.Get(id);
+        Document = await _docs.GetAsync(id, cancellationToken);
         return Page();
     }
 }

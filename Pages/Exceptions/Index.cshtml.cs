@@ -12,5 +12,6 @@ public sealed class IndexModel : PageModel
 
     public IReadOnlyList<CapturedDocument> Documents { get; private set; } = Array.Empty<CapturedDocument>();
 
-    public void OnGet() => Documents = _docs.ByStatus(ClassificationStatus.Exception);
+    public async Task OnGetAsync(CancellationToken cancellationToken) =>
+        Documents = await _docs.ByStatusAsync(ClassificationStatus.Exception, cancellationToken);
 }

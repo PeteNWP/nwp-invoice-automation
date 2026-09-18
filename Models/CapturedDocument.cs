@@ -24,6 +24,11 @@ public sealed class CapturedDocument
     /// <summary>Optional local/static URL for previewing the original document in the prototype.</summary>
     public string? AttachmentPreviewUrl { get; init; }
 
+    // Stable Graph identity for documents loaded from the SharePoint Incoming folder.
+    public string? GraphSiteId { get; init; }
+    public string? GraphDriveId { get; init; }
+    public string? GraphItemId { get; init; }
+
     // --- Classification ---
     public DocumentType DocumentType { get; set; } = DocumentType.Unknown;
     public ClassificationStatus Status { get; set; } = ClassificationStatus.Unclassified;

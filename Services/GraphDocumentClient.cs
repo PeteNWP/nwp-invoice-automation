@@ -30,20 +30,61 @@ public sealed class GraphDocumentClient : IGraphDocumentClient
         using var request = new HttpRequestMessage(HttpMethod.Get, $"https://graph.microsoft.com/v1.0/shares/{shareId}/driveItem/content");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync(cancellationToken);
             throw new InvalidOperationException($"Graph download failed: {(int)response.StatusCode} {response.ReasonPhrase}. {error}");
         }
 
-        var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        var stream = new MemoryStream();
+        await response.Content.CopyToAsync(stream, cancellationToken);
+        stream.Position = 0;
         var contentType = response.Content.Headers.ContentType?.MediaType ?? "application/pdf";
         var fileName = response.Content.Headers.ContentDisposition?.FileNameStar
             ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"')
             ?? "document.pdf";
 
         return new GraphDocumentContent(stream, contentType, fileName);
+    }
+
+    public async Task<GraphDocumentContent> DownloadDriveItemAsync(
+        string siteId,
+        string driveId,
+        string itemId,
+        string fileName,
+        string? contentType = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_graphOptions.Enabled)
+        {
+            throw new InvalidOperationException("Graph document preview is disabled. Set GraphDocuments:Enabled=true in appsettings.Local.json.");
+        }
+
+        var token = await GetAccessTokenAsync(cancellationToken);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"https://graph.microsoft.com/v1.0/sites/{Uri.EscapeDataString(siteId)}/drives/{Uri.EscapeDataString(driveId)}/items/{Uri.EscapeDataString(itemId)}/content");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new InvalidOperationException($"Graph drive-item download failed: {(int)response.StatusCode} {response.ReasonPhrase}. {error}");
+        }
+
+        var stream = new MemoryStream();
+        await response.Content.CopyToAsync(stream, cancellationToken);
+        stream.Position = 0;
+        var resolvedContentType = response.Content.Headers.ContentType?.MediaType
+            ?? contentType
+            ?? "application/octet-stream";
+        var resolvedFileName = response.Content.Headers.ContentDisposition?.FileNameStar
+            ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"')
+            ?? fileName;
+
+        return new GraphDocumentContent(stream, resolvedContentType, resolvedFileName);
     }
 
     private async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)

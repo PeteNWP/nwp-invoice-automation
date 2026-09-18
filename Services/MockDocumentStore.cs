@@ -17,19 +17,23 @@ public sealed class MockDocumentStore : IDocumentStore
         _docs = Seed(configuration);
     }
 
-    public IReadOnlyList<CapturedDocument> All() => _docs;
+    public string Source => "Mock/test records";
 
-    public CapturedDocument? Get(Guid id) => _docs.FirstOrDefault(d => d.Id == id);
+    public Task<IReadOnlyList<CapturedDocument>> AllAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<CapturedDocument>>(_docs);
 
-    public IReadOnlyList<CapturedDocument> ByType(DocumentType type) =>
-        _docs.Where(d => d.DocumentType == type).ToList();
+    public Task<CapturedDocument?> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_docs.FirstOrDefault(d => d.Id == id));
 
-    public IReadOnlyList<CapturedDocument> ByStatus(ClassificationStatus status) =>
-        _docs.Where(d => d.Status == status).ToList();
+    public async Task<IReadOnlyList<CapturedDocument>> ByTypeAsync(DocumentType type, CancellationToken cancellationToken = default) =>
+        (await AllAsync(cancellationToken)).Where(d => d.DocumentType == type).ToList();
 
-    public void ResolveException(Guid id, ExceptionResolution resolution)
+    public async Task<IReadOnlyList<CapturedDocument>> ByStatusAsync(ClassificationStatus status, CancellationToken cancellationToken = default) =>
+        (await AllAsync(cancellationToken)).Where(d => d.Status == status).ToList();
+
+    public async Task ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken = default)
     {
-        var doc = Get(id);
+        var doc = await GetAsync(id, cancellationToken);
         if (doc is null)
         {
             return;

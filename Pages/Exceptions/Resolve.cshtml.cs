@@ -26,9 +26,9 @@ public sealed class ResolveModel : PageModel
     [BindProperty]
     public InputModel Input { get; set; } = new();
 
-    public IActionResult OnGet(Guid id, bool saved = false)
+    public async Task<IActionResult> OnGetAsync(Guid id, bool saved = false, CancellationToken cancellationToken = default)
     {
-        Load(id);
+        await LoadAsync(id, cancellationToken);
         Saved = saved;
 
         if (Document is null)
@@ -40,9 +40,9 @@ public sealed class ResolveModel : PageModel
         return Page();
     }
 
-    public IActionResult OnPost(Guid id)
+    public async Task<IActionResult> OnPostAsync(Guid id, CancellationToken cancellationToken)
     {
-        Load(id);
+        await LoadAsync(id, cancellationToken);
 
         if (Document is null)
         {
@@ -75,14 +75,14 @@ public sealed class ResolveModel : PageModel
         };
 
         _suppliers.TeachFromResolution(resolution, Document);
-        _docs.ResolveException(id, resolution);
+        await _docs.ResolveExceptionAsync(id, resolution, cancellationToken);
 
         return RedirectToPage("/Exceptions/Resolve", new { id, saved = true });
     }
 
-    private void Load(Guid id)
+    private async Task LoadAsync(Guid id, CancellationToken cancellationToken)
     {
-        Document = _docs.Get(id);
+        Document = await _docs.GetAsync(id, cancellationToken);
         Suppliers = _suppliers.All().OrderBy(s => s.MasterName).ToList();
     }
 
