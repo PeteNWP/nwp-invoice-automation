@@ -52,6 +52,10 @@ else
                         <td><span class="doc-type-pill @type.css">@type.label</span></td>
                         <td>
                             @d.Subject
+                            @if (!string.IsNullOrWhiteSpace(d.FromAddress))
+                            {
+                                <div class="muted">From: @(d.FromName ?? d.FromAddress)@(!string.IsNullOrWhiteSpace(d.FromName) ? $" <{d.FromAddress}>" : "")</div>
+                            }
                             @if (d.IsNestedEmail)
                             {
                                 <div class="muted">Nested .eml attachment</div>

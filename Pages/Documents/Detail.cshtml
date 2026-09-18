@@ -42,16 +42,26 @@ else
                 <h2>Email envelope</h2>
                 <dl class="detail-grid">
                     <dt>Original mailbox</dt><dd>@d.OriginalMailbox</dd>
+                    <dt>From</dt><dd>@(string.IsNullOrWhiteSpace(d.FromAddress) ? "—" : string.IsNullOrWhiteSpace(d.FromName) ? d.FromAddress : $"{d.FromName} <{d.FromAddress}>")</dd>
+                    <dt>To</dt><dd>@(d.ToAddresses ?? "—")</dd>
+                    <dt>Cc</dt><dd>@(d.CcAddresses ?? "—")</dd>
                     <dt>Forwarded by</dt><dd>@(d.ForwardedBy ?? "—")</dd>
                     <dt>Received</dt>
                     <dd>
-                        @d.ReceivedDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)
+                        @(d.ReceivedAt?.ToUniversalTime().ToString("dd MMM yyyy HH:mm 'UTC'", CultureInfo.InvariantCulture) ?? d.ReceivedDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture))
                         @if (d.LateReceivedFlag) { <span class="status-flag flag-late">Late</span> }
                     </dd>
+                    <dt>Message ID</dt><dd>@(d.InternetMessageId ?? d.MessageId ?? "—")</dd>
+                    <dt>Conversation ID</dt><dd>@(d.ConversationId ?? "—")</dd>
                     <dt>Attachment</dt><dd>@d.AttachmentName</dd>
                     <dt>MIME type</dt><dd>@d.AttachmentMime</dd>
                     <dt>Nested email</dt><dd>@(d.IsNestedEmail ? "Yes — PDF nested inside an .eml" : "No")</dd>
                 </dl>
+                @if (!string.IsNullOrWhiteSpace(d.EmailBodyPreview))
+                {
+                    <h3>Email body preview</h3>
+                    <p style="white-space:pre-wrap">@d.EmailBodyPreview</p>
+                }
                 @if (!string.IsNullOrEmpty(d.ReviewerNote))
                 {
                     <div class="alert alert-warning"><strong>Reviewer note:</strong> @d.ReviewerNote</div>

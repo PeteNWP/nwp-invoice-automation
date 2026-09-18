@@ -181,6 +181,7 @@ public sealed class SharePointDocumentStore : IDocumentStore
                         Id = StableGuid(itemId),
                         Subject = name,
                         OriginalMailbox = _configuration["Mailbox:PrimaryMailbox"] ?? "invoices-evesham@nationwideproduce.com",
+                        ReceivedAt = received,
                         ReceivedDate = DateOnly.FromDateTime(received.UtcDateTime),
                         AttachmentName = name,
                         AttachmentMime = mimeType,
@@ -189,8 +190,7 @@ public sealed class SharePointDocumentStore : IDocumentStore
                         GraphItemId = itemId,
                         DocumentType = DocumentType.Unknown,
                         Status = ClassificationStatus.Unclassified,
-                        AssignedQueue = "Incoming",
-                        ReviewerNote = "Captured in SharePoint; email metadata and invoice extraction are not connected yet."
+                        AssignedQueue = "Incoming"
                     });
                 }
             }
@@ -198,10 +198,129 @@ public sealed class SharePointDocumentStore : IDocumentStore
             url = root.TryGetProperty("@odata.nextLink", out var next) ? next.GetString() : null;
         }
 
+        await LoadEmailMetadataAsync(token, siteId, driveId, documents, cancellationToken);
+
         return documents
-            .OrderByDescending(d => d.ReceivedDate)
+            .OrderByDescending(d => d.ReceivedAt
+                ?? new DateTimeOffset(d.ReceivedDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero))
             .ThenBy(d => d.AttachmentName, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private async Task LoadEmailMetadataAsync(
+        string token,
+        string siteId,
+        string driveId,
+        IReadOnlyList<CapturedDocument> documents,
+        CancellationToken cancellationToken)
+    {
+        // Microsoft Graph batches support at most 20 requests. Reading list-item fields in
+        // batches avoids one serial HTTP round-trip for every captured attachment.
+        foreach (var batch in documents.Where(d => !string.IsNullOrWhiteSpace(d.GraphItemId)).Chunk(20))
+        {
+            var indexed = batch.Select((document, index) => new { Document = document, Id = index.ToString() }).ToList();
+            var requestBody = new
+            {
+                requests = indexed.Select(x => new
+                {
+                    id = x.Id,
+                    method = "GET",
+                    url = $"/sites/{Uri.EscapeDataString(siteId)}/drives/{Uri.EscapeDataString(driveId)}/items/{Uri.EscapeDataString(x.Document.GraphItemId!)}/listItem/fields"
+                })
+            };
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "https://graph.microsoft.com/v1.0/$batch")
+            {
+                Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json")
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            using var response = await Http.SendAsync(request, cancellationToken);
+            var json = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Graph email-metadata batch read failed: {(int)response.StatusCode} {response.ReasonPhrase}. {json}");
+            }
+
+            using var payload = JsonDocument.Parse(json);
+            if (!payload.RootElement.TryGetProperty("responses", out var responses))
+            {
+                continue;
+            }
+
+            foreach (var itemResponse in responses.EnumerateArray())
+            {
+                var id = itemResponse.TryGetProperty("id", out var idElement) ? idElement.GetString() : null;
+                var status = itemResponse.TryGetProperty("status", out var statusElement) ? statusElement.GetInt32() : 0;
+                var target = indexed.FirstOrDefault(x => x.Id == id)?.Document;
+                if (target is null)
+                {
+                    continue;
+                }
+
+                if (status < 200 || status >= 300)
+                {
+                    var errorBody = itemResponse.TryGetProperty("body", out var error) ? error.GetRawText() : "No response body";
+                    _logger.LogWarning(
+                        "Graph email-metadata read failed for drive item {DriveItemId}: HTTP {Status}. {Error}",
+                        target.GraphItemId,
+                        status,
+                        errorBody);
+                    continue;
+                }
+
+                if (!itemResponse.TryGetProperty("body", out var fields))
+                {
+                    _logger.LogWarning("Graph email-metadata read returned no fields for drive item {DriveItemId}.", target.GraphItemId);
+                    continue;
+                }
+
+                ApplyEmailMetadata(target, fields);
+            }
+        }
+    }
+
+    private static void ApplyEmailMetadata(CapturedDocument document, JsonElement fields)
+    {
+        document.Subject = FirstNonBlank(Str(fields, "EmailSubject"), document.Subject) ?? document.Subject;
+        document.FromName = FirstNonBlank(Str(fields, "EmailFromName"), document.FromName);
+        document.FromAddress = FirstNonBlank(Str(fields, "EmailFromAddress"), document.FromAddress) ?? "";
+        document.ToAddresses = FirstNonBlank(Str(fields, "EmailTo"), document.ToAddresses);
+        document.CcAddresses = FirstNonBlank(Str(fields, "EmailCc"), document.CcAddresses);
+        document.MessageId = FirstNonBlank(Str(fields, "EmailMessageId"), document.MessageId);
+        document.InternetMessageId = FirstNonBlank(Str(fields, "EmailInternetMessageId"), document.InternetMessageId);
+        document.ConversationId = FirstNonBlank(Str(fields, "EmailConversationId"), document.ConversationId);
+        document.EmailBodyPreview = FirstNonBlank(Str(fields, "EmailBodyPreview"), document.EmailBodyPreview);
+        document.OriginalMailbox = FirstNonBlank(Str(fields, "SourceMailbox"), document.OriginalMailbox) ?? document.OriginalMailbox;
+
+        var received = Str(fields, "EmailReceivedAt");
+        if (DateTimeOffset.TryParse(received, out var receivedAt))
+        {
+            document.ReceivedAt = receivedAt;
+            document.ReceivedDate = DateOnly.FromDateTime(receivedAt.UtcDateTime);
+        }
+    }
+
+    private static string? Str(JsonElement fields, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!fields.TryGetProperty(name, out var value))
+            {
+                continue;
+            }
+
+            return value.ValueKind switch
+            {
+                JsonValueKind.String => value.GetString(),
+                JsonValueKind.Number => value.GetRawText(),
+                JsonValueKind.True => "Yes",
+                JsonValueKind.False => "No",
+                _ => null
+            };
+        }
+
+        return null;
     }
 
     private async Task<string> ResolveSiteIdAsync(string token, CancellationToken cancellationToken)

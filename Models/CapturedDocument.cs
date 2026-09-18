@@ -10,11 +10,19 @@ public sealed class CapturedDocument
     public Guid Id { get; init; } = Guid.NewGuid();
 
     // --- Email envelope ---
-    public string Subject { get; init; } = "";
-    public string FromAddress { get; init; } = "";
-    public string OriginalMailbox { get; init; } = "";
-    public string? ForwardedBy { get; init; }
-    public DateOnly ReceivedDate { get; init; }
+    public string Subject { get; set; } = "";
+    public string FromAddress { get; set; } = "";
+    public string? FromName { get; set; }
+    public string OriginalMailbox { get; set; } = "";
+    public string? ForwardedBy { get; set; }
+    public string? ToAddresses { get; set; }
+    public string? CcAddresses { get; set; }
+    public string? MessageId { get; set; }
+    public string? InternetMessageId { get; set; }
+    public string? ConversationId { get; set; }
+    public string? EmailBodyPreview { get; set; }
+    public DateTimeOffset? ReceivedAt { get; set; }
+    public DateOnly ReceivedDate { get; set; }
 
     // --- Attachment ---
     public string AttachmentName { get; init; } = "";
