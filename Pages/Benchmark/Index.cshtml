@@ -50,7 +50,7 @@
             <td>@h.Reconciles</td>
             <td class="muted">@h.Notes</td>
         </tr>
-        @{ var lines = Model.LinesFor(h.InvoiceNumber); }
+        var lines = Model.LinesFor(h.InvoiceNumber);
         @if (lines.Count > 0)
         {
             <tr>
