@@ -38,6 +38,41 @@ else
                 </dl>
             </div>
 
+            @if (d.Extraction is { } extraction)
+            {
+                <div class="card">
+                    <h2>Extracted invoice</h2>
+                    <dl class="detail-grid">
+                        <dt>Supplier</dt><dd>@(extraction.SupplierName ?? "—")</dd>
+                        <dt>Invoice number</dt><dd>@(extraction.InvoiceNumber ?? "—")</dd>
+                        <dt>Invoice date</dt><dd>@(extraction.InvoiceDate?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "—")</dd>
+                        <dt>Reference</dt><dd>@(extraction.Reference ?? "—")</dd>
+                        <dt>Total</dt><dd>@(extraction.Total is { } et ? $"{extraction.Currency} {et.ToString("N2", CultureInfo.InvariantCulture)}" : "—")</dd>
+                        <dt>Confidence</dt><dd>@(extraction.Confidence is { } confidence ? confidence.ToString("P1", CultureInfo.InvariantCulture) : "—")</dd>
+                        <dt>Extracted</dt><dd>@extraction.ExtractedAt.ToUniversalTime().ToString("dd MMM yyyy HH:mm 'UTC'", CultureInfo.InvariantCulture)</dd>
+                    </dl>
+                    @if (extraction.Lines.Count > 0)
+                    {
+                        <div style="overflow-x:auto">
+                            <table>
+                                <thead><tr><th>Line</th><th>SKU</th><th>Description</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead>
+                                <tbody>
+                                @foreach (var line in extraction.Lines)
+                                {
+                                    <tr>
+                                        <td>@line.LineNumber</td><td>@(line.Sku ?? "—")</td><td>@line.Description</td>
+                                        <td>@(line.Quantity?.ToString("N4", CultureInfo.InvariantCulture) ?? "—")</td>
+                                        <td>@(line.UnitPrice?.ToString("N4", CultureInfo.InvariantCulture) ?? "—")</td>
+                                        <td>@(line.LineTotal?.ToString("N4", CultureInfo.InvariantCulture) ?? "—")</td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            }
+
             <div class="card">
                 <h2>Email envelope</h2>
                 <dl class="detail-grid">

@@ -19,6 +19,7 @@ public sealed class SharePointDocumentStore : IDocumentStore
     private readonly BenchmarkGraphOptions _siteOptions;
     private readonly IConfiguration _configuration;
     private readonly MockDocumentStore _fallback;
+    private readonly IInvoiceExtractionRepository _extractions;
     private readonly ILogger<SharePointDocumentStore> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private IReadOnlyList<CapturedDocument>? _cache;
@@ -30,6 +31,7 @@ public sealed class SharePointDocumentStore : IDocumentStore
         IOptions<BenchmarkGraphOptions> siteOptions,
         IConfiguration configuration,
         MockDocumentStore fallback,
+        IInvoiceExtractionRepository extractions,
         ILogger<SharePointDocumentStore> logger)
     {
         _httpClientFactory = httpClientFactory;
@@ -37,6 +39,7 @@ public sealed class SharePointDocumentStore : IDocumentStore
         _siteOptions = siteOptions.Value;
         _configuration = configuration;
         _fallback = fallback;
+        _extractions = extractions;
         _logger = logger;
     }
 
@@ -199,12 +202,43 @@ public sealed class SharePointDocumentStore : IDocumentStore
         }
 
         await LoadEmailMetadataAsync(token, siteId, driveId, documents, cancellationToken);
+        await EnrichWithExtractionsAsync(documents, cancellationToken);
 
         return documents
             .OrderByDescending(d => d.ReceivedAt
                 ?? new DateTimeOffset(d.ReceivedDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero))
             .ThenBy(d => d.AttachmentName, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private async Task EnrichWithExtractionsAsync(IReadOnlyList<CapturedDocument> documents, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var keys = documents
+                .Where(d => !string.IsNullOrWhiteSpace(d.GraphDriveId) && !string.IsNullOrWhiteSpace(d.GraphItemId))
+                .Select(d => (d.GraphDriveId!, d.GraphItemId!));
+            var extractions = await _extractions.GetBatchAsync(keys, cancellationToken);
+            foreach (var document in documents)
+            {
+                if (document.GraphDriveId is null || document.GraphItemId is null ||
+                    !extractions.TryGetValue((document.GraphDriveId, document.GraphItemId), out var extraction)) continue;
+                document.Extraction = extraction;
+                document.DetectedSupplier = extraction.SupplierName;
+                document.InvoiceNumber = extraction.InvoiceNumber;
+                document.InvoiceDate = extraction.InvoiceDate;
+                document.BatchOrReference = extraction.Reference;
+                document.Currency = extraction.Currency;
+                document.Total = extraction.Total;
+                document.DocumentType = DocumentType.Invoice;
+                document.Status = ClassificationStatus.Classified;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Invoice extraction enrichment is unavailable; returning SharePoint documents without extraction data.");
+        }
     }
 
     private async Task LoadEmailMetadataAsync(

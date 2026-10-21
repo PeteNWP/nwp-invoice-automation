@@ -60,3 +60,39 @@ Replace mock data with real capture, one piece at a time:
 4. supplier profiles with taught rules, aliases and layout-change detection;
 5. validation gates and routing to Invoice Queue / Statements / Exceptions;
 6. finance workflow (To Post / To Remit) and Sage export once Mike confirms the interface.
+
+## Invoice extraction receiver
+
+Apply `sql/001_invoice_extractions.sql` to the application database. The script is
+idempotent and creates the extraction header/line tables and their constraints.
+Configure these values through `appsettings.Local.json`, environment variables, or the
+production secret store (never commit real values):
+
+- `ConnectionStrings:InvoiceAutomation` (`ConnectionStrings__InvoiceAutomation` in environment variables)
+- `InvoiceExtractionApi:ApiKey` (`InvoiceExtractionApi__ApiKey` in environment variables)
+
+The temporary receiver is `POST /api/invoice-extractions`, accepts JSON only, is limited
+to 1 MiB and 500 unique-numbered lines, and requires
+`X-Invoice-Automation-Key`. It fails closed when the configured key is absent. Example:
+
+```bash
+curl -X POST https://localhost:5001/api/invoice-extractions \
+  -H 'Content-Type: application/json' \
+  -H "X-Invoice-Automation-Key: $INVOICE_AUTOMATION_KEY" \
+  --data '{
+    "driveId":"sharepoint-drive-id",
+    "driveItemId":"sharepoint-item-id",
+    "supplierName":"Example Supplier",
+    "invoiceNumber":"INV-123",
+    "invoiceDate":"2026-10-21",
+    "currency":"GBP",
+    "total":120.00,
+    "confidence":0.98,
+    "lines":[{"lineNumber":1,"description":"Produce","quantity":10,"unitPrice":12,"lineTotal":120}]
+  }'
+```
+
+Posting the same `(driveId, driveItemId)` updates the header and atomically replaces its
+lines. SharePoint Inbox reads enrich matching documents from SQL. If extraction storage
+is unconfigured or unavailable, the failure is logged and SharePoint documents remain
+available without extraction fields.

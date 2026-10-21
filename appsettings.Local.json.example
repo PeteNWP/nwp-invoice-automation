@@ -23,11 +23,6 @@
     "ClientSecret": "YOUR_CLIENT_SECRET",
     "CallbackPath": "/signin-oidc"
   },
-  "Sql": {
-    "ConnectionString": "Server=BO-REP;Database=NWPInvoiceDev;TrustServerCertificate=True;",
-    "UserId": "YOUR_SQL_LOGIN",
-    "Password": "YOUR_SQL_PASSWORD"
-  },
   "GraphDocuments": {
     "Enabled": true,
     "TenantId": "YOUR_TENANT_ID",
@@ -45,5 +40,11 @@
     "SitePath": "",
     "HeadersListId": "997536d7-f254-4e58-bd08-c4e9e051a019",
     "LinesListId": "823f50ad-2c2f-4b75-a556-1a85f62527a3"
+  },
+  "ConnectionStrings": {
+    "InvoiceAutomation": "Server=YOUR_SQL_SERVER;Database=NWPInvoiceDev;User ID=YOUR_SQL_LOGIN;Password=YOUR_SQL_PASSWORD;Encrypt=True;TrustServerCertificate=False;"
+  },
+  "InvoiceExtractionApi": {
+    "ApiKey": "GENERATE_A_LONG_RANDOM_SECRET"
   }
 }

@@ -50,6 +50,7 @@ public sealed class CapturedDocument
     public string? BatchOrReference { get; set; }
     public decimal? Total { get; set; }
     public string? Currency { get; set; }
+    public InvoiceExtraction? Extraction { get; set; }
 
     // --- Workflow routing ---
     public string? AssignedQueue { get; set; }

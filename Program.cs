@@ -16,6 +16,7 @@ builder.Services.Configure<BenchmarkGraphOptions>(builder.Configuration.GetSecti
 builder.Services.AddSingleton<UserAccessService>();
 builder.Services.AddHttpClient<IGraphDocumentClient, GraphDocumentClient>();
 builder.Services.AddHttpClient();
+var mvc = builder.Services.AddControllersWithViews();
 
 if (authEnabled)
 {
@@ -41,7 +42,7 @@ if (authEnabled)
         }));
     });
 
-    builder.Services.AddControllersWithViews().AddMicrosoftIdentityUI();
+    mvc.AddMicrosoftIdentityUI();
 }
 
 builder.Services.AddRazorPages(options =>
@@ -56,6 +57,8 @@ builder.Services.AddRazorPages(options =>
 // development source or configured fallback while SQL workflow persistence is built.
 builder.Services.AddSingleton<MockDocumentStore>();
 builder.Services.AddSingleton<IDocumentStore, SharePointDocumentStore>();
+builder.Services.AddSingleton<IInvoiceExtractionRepository, InvoiceExtractionRepository>();
+builder.Services.AddScoped<InvoiceExtractionApiKeyFilter>();
 builder.Services.AddSingleton<SupplierProfileStore>();
 builder.Services.AddSingleton<GraphBenchmarkClient>();
 builder.Services.AddSingleton<BenchmarkStore>();
@@ -76,8 +79,8 @@ if (authEnabled)
 {
     app.UseAuthentication();
     app.UseAuthorization();
-    app.MapControllers();
 }
 
+app.MapControllers();
 app.MapRazorPages();
 app.Run();
