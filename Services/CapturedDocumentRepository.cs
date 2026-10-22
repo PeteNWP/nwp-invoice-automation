@@ -259,7 +259,7 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
         const string sql = """
             WITH batch AS (
                 SELECT TOP (@BatchSize) Id, SiteId, DriveId, GraphItemId, AttachmentName, AttachmentMime,
-                                        ProcessingStatus, ProcessingAttempts
+                                        ProcessingStatus, ProcessingAttempts, ProcessingStartedAt, UpdatedAt
                 FROM dbo.CapturedDocument WITH (UPDLOCK, READPAST, ROWLOCK)
                 WHERE IsDeleted = 0
                   AND DriveId IS NOT NULL AND GraphItemId IS NOT NULL
