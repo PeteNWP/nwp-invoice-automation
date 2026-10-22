@@ -53,10 +53,15 @@ builder.Services.AddRazorPages(options =>
     }
 });
 
-// SharePoint is the live capture source. Mock records remain available as an explicit
-// development source or configured fallback while SQL workflow persistence is built.
+// SharePoint is the capture/system-of-record. GraphInboxSyncWorker is the only thing that
+// calls Graph for inbox capture, on its own timer; it writes results to SQL. The UI reads
+// SQL only through SqlCapturedDocumentStore and never waits on Graph. Mock records remain
+// available as an explicit development source or configured fallback.
 builder.Services.AddSingleton<MockDocumentStore>();
-builder.Services.AddSingleton<IDocumentStore, SharePointDocumentStore>();
+builder.Services.AddSingleton<IDocumentStore, SqlCapturedDocumentStore>();
+builder.Services.AddSingleton<ICapturedDocumentRepository, CapturedDocumentRepository>();
+builder.Services.AddSingleton<GraphInboxReader>();
+builder.Services.AddHostedService<GraphInboxSyncWorker>();
 builder.Services.AddSingleton<IInvoiceExtractionRepository, InvoiceExtractionRepository>();
 builder.Services.AddScoped<InvoiceExtractionApiKeyFilter>();
 builder.Services.AddSingleton<SupplierProfileStore>();

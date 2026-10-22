@@ -96,3 +96,38 @@ Posting the same `(driveId, driveItemId)` updates the header and atomically repl
 lines. SharePoint Inbox reads enrich matching documents from SQL. If extraction storage
 is unconfigured or unavailable, the failure is logged and SharePoint documents remain
 available without extraction fields.
+
+## SharePoint Incoming document cache
+
+Apply `sql/002_captured_documents.sql` after `001_invoice_extractions.sql`. It is
+idempotent and creates `dbo.CapturedDocument` (one row per SharePoint Incoming drive item,
+keyed by `(DriveId, GraphItemId)`) and `dbo.GraphSyncState` (one row per sync worker).
+
+The UI (`/Inbox`, `/Invoices`, `/Statements`, `/Exceptions`, document previews) reads this
+table only — it never calls Microsoft Graph on a page request, so a page load never blocks
+on, or fails because of, Graph. A background `GraphInboxSyncWorker` is the only thing that
+calls Graph for inbox capture:
+
+- It runs on a timer (`SharePointInbox:SyncIntervalSeconds`, default **300 seconds / 5
+  minutes**, minimum 30) and only when `DocumentSource` is `SharePoint` and
+  `GraphDocuments:Enabled` is `true`.
+- The first cycle performs an initial Graph delta enumeration of the Incoming folder.
+  Subsequent cycles follow the persisted delta cursor in `dbo.GraphSyncState`, so only
+  added, changed or deleted items are processed. Changed records are transactionally
+  upserted into `dbo.CapturedDocument`; Graph-reported deletions are soft-deleted
+  (`IsDeleted = 1`). If Graph expires a cursor, the worker safely performs a fresh initial
+  delta pass and rebuilds the cursor.
+- `dbo.CapturedDocument` keeps capture/extraction columns separate from resolution columns
+  (`AssignedQueue`, `WorkflowOwner`, `ReviewerNote`, `Resolved*`). The sync only ever writes
+  the former, so a human's exception resolution always survives the next sync.
+- If a sync cycle fails (including Graph throttling), it's logged and recorded in
+  `dbo.GraphSyncState`; the UI keeps serving the last successfully synced SQL data instead
+  of failing the request. Graph requests that return `429 Too Many Requests` are retried
+  with bounded backoff, honouring the `Retry-After` header when Graph sends one (falling
+  back to exponential backoff, capped at 30s, otherwise; up to 4 attempts per request).
+- If the cache has never synced and Graph is unavailable, SharePoint reads fail closed
+  unless `SharePointInbox:FallbackToMock` is `true`, in which case mock/test records are
+  served and logged as a fallback.
+
+Configure `ConnectionStrings:InvoiceAutomation` as above; no separate connection string is
+needed for the document cache.

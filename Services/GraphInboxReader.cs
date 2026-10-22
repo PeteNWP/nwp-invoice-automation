@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
@@ -8,159 +9,163 @@ using Nwp.InvoiceAutomation.Web.Models;
 namespace Nwp.InvoiceAutomation.Web.Services;
 
 /// <summary>
-/// Reads captured documents from the SharePoint Invoice Automation/Incoming folder.
-/// Email envelope metadata and extracted invoice fields will be added when capture records
-/// are persisted in SQL; for now every discovered file enters the workflow as Unclassified.
+/// Reads the SharePoint Invoice Automation/Incoming folder straight from Microsoft Graph.
+/// This is the only place in the app that calls Graph for inbox capture, and it is only
+/// ever called by <see cref="GraphInboxSyncWorker"/> on its own schedule — never from a
+/// UI request. The worker persists the result to SQL; <see cref="SqlCapturedDocumentStore"/>
+/// is what the UI actually reads.
+///
+/// <see cref="SyncDeltaAsync"/> drives a Microsoft Graph delta query
+/// (/drives/{id}/items/{folderItemId}/delta) instead of a full folder listing. With no
+/// stored cursor it walks the complete initial delta (every current item in the folder);
+/// with a stored cursor it follows that link and only sees items that actually changed.
+/// Graph's item-scoped delta recurses into subfolders, so results are filtered client-side
+/// to direct children of the configured Incoming folder to match the previous non-recursive
+/// :/children listing. See docs/SharePointEmailMetadata.md.
 /// </summary>
-public sealed class SharePointDocumentStore : IDocumentStore
+/// <summary>Outcome of one <see cref="GraphInboxReader.SyncDeltaAsync"/> call.</summary>
+/// <param name="DriveId">The Incoming folder's drive id.</param>
+/// <param name="Upserts">Changed/added file items, enriched with email metadata and extraction data. On an initial sync this is the complete current folder contents.</param>
+/// <param name="Deletions">(DriveId, GraphItemId) pairs Graph reported as removed.</param>
+/// <param name="DeltaLink">The new cursor to persist via <see cref="ICapturedDocumentRepository.SetDeltaLinkAsync"/> once <see cref="Upserts"/>/<see cref="Deletions"/> are committed.</param>
+/// <param name="IsInitialSync">True when this was a full initial delta pass (no prior cursor, or a 410-triggered rebuild).</param>
+/// <param name="ResyncRequired">True when Graph returned 410 (resyncRequired) and this result is from the rebuilt pass.</param>
+public sealed record GraphDeltaResult(
+    string DriveId,
+    IReadOnlyList<CapturedDocument> Upserts,
+    IReadOnlyList<(string DriveId, string GraphItemId)> Deletions,
+    string? DeltaLink,
+    bool IsInitialSync,
+    bool ResyncRequired);
+
+public sealed class GraphInboxReader
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly GraphDocumentOptions _graphOptions;
     private readonly BenchmarkGraphOptions _siteOptions;
     private readonly IConfiguration _configuration;
-    private readonly MockDocumentStore _fallback;
     private readonly IInvoiceExtractionRepository _extractions;
-    private readonly ILogger<SharePointDocumentStore> _logger;
-    private readonly SemaphoreSlim _gate = new(1, 1);
-    private IReadOnlyList<CapturedDocument>? _cache;
-    private DateTimeOffset _cacheExpiresAt;
+    private readonly ILogger<GraphInboxReader> _logger;
 
-    public SharePointDocumentStore(
+    public GraphInboxReader(
         IHttpClientFactory httpClientFactory,
         IOptions<GraphDocumentOptions> graphOptions,
         IOptions<BenchmarkGraphOptions> siteOptions,
         IConfiguration configuration,
-        MockDocumentStore fallback,
         IInvoiceExtractionRepository extractions,
-        ILogger<SharePointDocumentStore> logger)
+        ILogger<GraphInboxReader> logger)
     {
         _httpClientFactory = httpClientFactory;
         _graphOptions = graphOptions.Value;
         _siteOptions = siteOptions.Value;
         _configuration = configuration;
-        _fallback = fallback;
         _extractions = extractions;
         _logger = logger;
     }
 
     private HttpClient Http => _httpClientFactory.CreateClient("sharepoint-inbox");
 
-    public string Source { get; private set; } = "SharePoint Incoming";
-
-    public async Task<IReadOnlyList<CapturedDocument>> AllAsync(CancellationToken cancellationToken = default)
-    {
-        if (UseMockSource())
-        {
-            Source = _fallback.Source;
-            return await _fallback.AllAsync(cancellationToken);
-        }
-
-        if (_cache is not null && DateTimeOffset.UtcNow < _cacheExpiresAt)
-        {
-            return _cache;
-        }
-
-        await _gate.WaitAsync(cancellationToken);
-        try
-        {
-            if (_cache is not null && DateTimeOffset.UtcNow < _cacheExpiresAt)
-            {
-                return _cache;
-            }
-
-            try
-            {
-                if (!_graphOptions.Enabled)
-                {
-                    throw new InvalidOperationException("DocumentSource is SharePoint but GraphDocuments:Enabled is not true.");
-                }
-
-                _cache = await LoadFromSharePointAsync(cancellationToken);
-                _cacheExpiresAt = DateTimeOffset.UtcNow.AddSeconds(30);
-                Source = $"SharePoint: {_configuration["SharePointInbox:LibraryName"] ?? "Invoice Automation"}/{FolderPath()}";
-                return _cache;
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                if (_configuration.GetValue<bool>("SharePointInbox:FallbackToMock"))
-                {
-                    _logger.LogWarning(ex, "SharePoint Incoming read failed; falling back to mock/test records by configuration.");
-                    Source = "Mock/test records (SharePoint Incoming unreachable)";
-                    return await _fallback.AllAsync(cancellationToken);
-                }
-
-                _logger.LogError(ex, "SharePoint Incoming read failed.");
-                throw;
-            }
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
-
-    public async Task<CapturedDocument?> GetAsync(Guid id, CancellationToken cancellationToken = default) =>
-        (await AllAsync(cancellationToken)).FirstOrDefault(d => d.Id == id);
-
-    public async Task<IReadOnlyList<CapturedDocument>> ByTypeAsync(DocumentType type, CancellationToken cancellationToken = default) =>
-        (await AllAsync(cancellationToken)).Where(d => d.DocumentType == type).ToList();
-
-    public async Task<IReadOnlyList<CapturedDocument>> ByStatusAsync(ClassificationStatus status, CancellationToken cancellationToken = default) =>
-        (await AllAsync(cancellationToken)).Where(d => d.Status == status).ToList();
-
-    public async Task ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken = default)
-    {
-        var document = await GetAsync(id, cancellationToken);
-        if (document is null)
-        {
-            return;
-        }
-
-        document.DocumentType = resolution.DocumentType;
-        document.Status = resolution.AssignedQueue == "Ignored"
-            ? ClassificationStatus.Ignored
-            : ClassificationStatus.Classified;
-        document.ExceptionReason = null;
-        document.SupplierMasterName = resolution.SupplierMasterName;
-        document.InvoiceNumber = resolution.InvoiceNumber;
-        document.InvoiceDate = resolution.InvoiceDate;
-        document.BatchOrReference = resolution.BatchOrReference;
-        document.Total = resolution.Total;
-        document.Currency = resolution.Currency;
-        document.AssignedQueue = resolution.AssignedQueue;
-        document.WorkflowOwner = resolution.WorkflowOwner;
-        document.ReviewerNote = resolution.ResolutionNote;
-    }
-
-    private bool UseMockSource() =>
-        string.Equals(_configuration["DocumentSource"], "Mock", StringComparison.OrdinalIgnoreCase);
-
-    private string FolderPath() =>
+    public string FolderPath() =>
         _configuration["SharePointInbox:FolderPath"]?.Trim('/')
         ?? "Incoming";
 
-    private async Task<IReadOnlyList<CapturedDocument>> LoadFromSharePointAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Runs one Graph delta cycle against the Incoming folder. With <paramref name="storedDeltaLink"/>
+    /// null/blank this performs the initial full delta pass (every current item comes back as an
+    /// "addition" since there is no prior cursor); otherwise it follows the stored cursor and only
+    /// sees items that changed since the last run. A 410 (resyncRequired) response is handled by
+    /// clearing the cursor and transparently rebuilding from a fresh initial pass within this same
+    /// call, so the caller always gets a usable result and a valid new delta link.
+    /// </summary>
+    public async Task<GraphDeltaResult> SyncDeltaAsync(string? storedDeltaLink, CancellationToken cancellationToken)
     {
+        if (!_graphOptions.Enabled)
+        {
+            throw new InvalidOperationException("DocumentSource is SharePoint but GraphDocuments:Enabled is not true.");
+        }
+
         var token = await GetAccessTokenAsync(cancellationToken);
         var siteId = await ResolveSiteIdAsync(token, cancellationToken);
         var driveId = await ResolveDriveIdAsync(token, siteId, cancellationToken);
+
+        var isInitialSync = string.IsNullOrWhiteSpace(storedDeltaLink);
+        var startUrl = isInitialSync
+            ? await BuildInitialDeltaUrlAsync(token, siteId, driveId, cancellationToken)
+            : storedDeltaLink!;
+
+        try
+        {
+            return await WalkDeltaAsync(token, siteId, driveId, startUrl, isInitialSync, resyncRequired: false, cancellationToken);
+        }
+        catch (GraphDeltaResyncRequiredException)
+        {
+            _logger.LogWarning(
+                "SharePoint Incoming delta cursor returned 410 (resyncRequired); clearing the cursor and rebuilding from a fresh full delta.");
+            var freshUrl = await BuildInitialDeltaUrlAsync(token, siteId, driveId, cancellationToken);
+            return await WalkDeltaAsync(token, siteId, driveId, freshUrl, isInitialSync: true, resyncRequired: true, cancellationToken);
+        }
+    }
+
+    private async Task<string> BuildInitialDeltaUrlAsync(string token, string siteId, string driveId, CancellationToken cancellationToken)
+    {
+        var folderItemId = await ResolveFolderItemIdAsync(token, siteId, driveId, cancellationToken);
+        return $"https://graph.microsoft.com/v1.0/drives/{driveId}/items/{folderItemId}/delta";
+    }
+
+    private async Task<string> ResolveFolderItemIdAsync(string token, string siteId, string driveId, CancellationToken cancellationToken)
+    {
         var encodedPath = string.Join("/", FolderPath().Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString));
-        var url = $"https://graph.microsoft.com/v1.0/sites/{siteId}/drives/{driveId}/root:/{encodedPath}:/children?$select=id,name,file,folder,createdDateTime,lastModifiedDateTime,parentReference&$top=200";
-        var documents = new List<CapturedDocument>();
+        var url = $"https://graph.microsoft.com/v1.0/sites/{siteId}/drives/{driveId}/root:/{encodedPath}?$select=id";
+        using var response = await SendWithRetryAsync(() =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return request;
+        }, cancellationToken);
+        var json = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Graph Incoming-folder lookup failed: {(int)response.StatusCode} {response.ReasonPhrase}. {json}");
+        }
+
+        using var payload = JsonDocument.Parse(json);
+        return payload.RootElement.GetProperty("id").GetString()
+            ?? throw new InvalidOperationException("Graph Incoming-folder lookup did not return an id.");
+    }
+
+    /// <summary>
+    /// Pages through one delta walk (initial or incremental) to completion, splitting items into
+    /// upserts and deletions. Deliberately does not $select fields on the delta request: Graph can
+    /// omit the `deleted` facet for deleted items when $select is applied, which would make
+    /// deletions invisible.
+    /// </summary>
+    private async Task<GraphDeltaResult> WalkDeltaAsync(
+        string token, string siteId, string driveId, string startUrl, bool isInitialSync, bool resyncRequired, CancellationToken cancellationToken)
+    {
+        var upserts = new List<CapturedDocument>();
+        var deletions = new List<(string DriveId, string GraphItemId)>();
+        string? url = startUrl;
+        string? finalDeltaLink = null;
 
         while (!string.IsNullOrWhiteSpace(url))
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            var response = await Http.SendAsync(request, cancellationToken);
+            var currentUrl = url;
+            using var response = await SendWithRetryAsync(() =>
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, currentUrl);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                return request;
+            }, cancellationToken);
+
+            if (response.StatusCode == HttpStatusCode.Gone)
+            {
+                throw new GraphDeltaResyncRequiredException();
+            }
+
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                throw new InvalidOperationException($"Graph Incoming-folder read failed: {(int)response.StatusCode} {response.ReasonPhrase}. {json}");
+                throw new InvalidOperationException($"Graph Incoming-folder delta read failed: {(int)response.StatusCode} {response.ReasonPhrase}. {json}");
             }
 
             using var payload = JsonDocument.Parse(json);
@@ -169,9 +174,25 @@ public sealed class SharePointDocumentStore : IDocumentStore
             {
                 foreach (var item in items.EnumerateArray())
                 {
+                    if (item.TryGetProperty("deleted", out _))
+                    {
+                        var deletedId = item.TryGetProperty("id", out var idElement) ? idElement.GetString() : null;
+                        if (!string.IsNullOrWhiteSpace(deletedId))
+                        {
+                            deletions.Add((driveId, deletedId));
+                        }
+
+                        continue;
+                    }
+
                     if (!item.TryGetProperty("file", out var file))
                     {
-                        continue;
+                        continue; // folder or package item; Incoming only tracks files.
+                    }
+
+                    if (!IsDirectChildOfConfiguredFolder(item))
+                    {
+                        continue; // item-scoped delta recurses into subfolders; keep this non-recursive.
                     }
 
                     var itemId = item.GetProperty("id").GetString() ?? "";
@@ -179,7 +200,7 @@ public sealed class SharePointDocumentStore : IDocumentStore
                     var mimeType = file.TryGetProperty("mimeType", out var mime) ? mime.GetString() ?? "application/octet-stream" : "application/octet-stream";
                     var received = ReadDate(item, "createdDateTime") ?? ReadDate(item, "lastModifiedDateTime") ?? DateTimeOffset.UtcNow;
 
-                    documents.Add(new CapturedDocument
+                    upserts.Add(new CapturedDocument
                     {
                         Id = StableGuid(itemId),
                         Subject = name,
@@ -198,18 +219,44 @@ public sealed class SharePointDocumentStore : IDocumentStore
                 }
             }
 
-            url = root.TryGetProperty("@odata.nextLink", out var next) ? next.GetString() : null;
+            if (root.TryGetProperty("@odata.nextLink", out var next))
+            {
+                url = next.GetString();
+            }
+            else
+            {
+                finalDeltaLink = root.TryGetProperty("@odata.deltaLink", out var deltaLinkElement) ? deltaLinkElement.GetString() : null;
+                url = null;
+            }
         }
 
-        await LoadEmailMetadataAsync(token, siteId, driveId, documents, cancellationToken);
-        await EnrichWithExtractionsAsync(documents, cancellationToken);
+        await LoadEmailMetadataAsync(token, siteId, driveId, upserts, cancellationToken);
+        await EnrichWithExtractionsAsync(upserts, cancellationToken);
 
-        return documents
-            .OrderByDescending(d => d.ReceivedAt
-                ?? new DateTimeOffset(d.ReceivedDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero))
-            .ThenBy(d => d.AttachmentName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        return new GraphDeltaResult(driveId, upserts, deletions, finalDeltaLink, isInitialSync, resyncRequired);
     }
+
+    /// <summary>
+    /// The item-scoped delta endpoint recurses into subfolders of the Incoming folder, but the
+    /// previous :/children listing only ever saw direct children. Filtering on parentReference.path
+    /// keeps that same scope. Deleted items are handled separately and never reach this check.
+    /// </summary>
+    private bool IsDirectChildOfConfiguredFolder(JsonElement item)
+    {
+        if (!item.TryGetProperty("parentReference", out var parentRef) || !parentRef.TryGetProperty("path", out var pathElement))
+        {
+            _logger.LogWarning(
+                "Graph delta item {Id} had no parentReference.path; excluding it from the Incoming sync defensively.",
+                item.TryGetProperty("id", out var idElement) ? idElement.GetString() : "(unknown)");
+            return false;
+        }
+
+        var path = Uri.UnescapeDataString(pathElement.GetString() ?? "");
+        var expectedSuffix = "root:/" + FolderPath();
+        return path.EndsWith(expectedSuffix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class GraphDeltaResyncRequiredException : Exception;
 
     private async Task EnrichWithExtractionsAsync(IReadOnlyList<CapturedDocument> documents, CancellationToken cancellationToken)
     {
@@ -263,13 +310,16 @@ public sealed class SharePointDocumentStore : IDocumentStore
                 })
             };
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, "https://graph.microsoft.com/v1.0/$batch")
+            var requestJson = JsonSerializer.Serialize(requestBody);
+            using var response = await SendWithRetryAsync(() =>
             {
-                Content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json")
-            };
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-            using var response = await Http.SendAsync(request, cancellationToken);
+                var request = new HttpRequestMessage(HttpMethod.Post, "https://graph.microsoft.com/v1.0/$batch")
+                {
+                    Content = new StringContent(requestJson, Encoding.UTF8, "application/json")
+                };
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                return request;
+            }, cancellationToken);
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
@@ -369,9 +419,12 @@ public sealed class SharePointDocumentStore : IDocumentStore
         var url = string.IsNullOrWhiteSpace(sitePath)
             ? $"https://graph.microsoft.com/v1.0/sites/{hostname}"
             : $"https://graph.microsoft.com/v1.0/sites/{hostname}:/{sitePath.Trim('/')}";
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        var response = await Http.SendAsync(request, cancellationToken);
+        using var response = await SendWithRetryAsync(() =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return request;
+        }, cancellationToken);
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
@@ -392,9 +445,12 @@ public sealed class SharePointDocumentStore : IDocumentStore
         }
 
         var libraryName = _configuration["SharePointInbox:LibraryName"] ?? "Invoice Automation";
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"https://graph.microsoft.com/v1.0/sites/{siteId}/drives?$select=id,name&$top=200");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        var response = await Http.SendAsync(request, cancellationToken);
+        using var response = await SendWithRetryAsync(() =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, $"https://graph.microsoft.com/v1.0/sites/{siteId}/drives?$select=id,name&$top=200");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            return request;
+        }, cancellationToken);
         var json = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
@@ -448,6 +504,51 @@ public sealed class SharePointDocumentStore : IDocumentStore
         using var payload = JsonDocument.Parse(json);
         return payload.RootElement.GetProperty("access_token").GetString()
             ?? throw new InvalidOperationException("Graph token response did not include an access_token.");
+    }
+
+    /// <summary>
+    /// Sends a Graph request, honouring Retry-After with bounded retries when Graph responds
+    /// with 429 Too Many Requests. <paramref name="requestFactory"/> is invoked once per attempt
+    /// since an <see cref="HttpRequestMessage"/> cannot be sent more than once.
+    /// </summary>
+    private async Task<HttpResponseMessage> SendWithRetryAsync(Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 4;
+        for (var attempt = 1; ; attempt++)
+        {
+            using var request = requestFactory();
+            var response = await Http.SendAsync(request, cancellationToken);
+            if (response.StatusCode != HttpStatusCode.TooManyRequests || attempt >= maxAttempts)
+            {
+                return response;
+            }
+
+            var delay = ResolveRetryAfter(response) ?? TimeSpan.FromSeconds(Math.Pow(2, attempt));
+            _logger.LogWarning(
+                "Graph request to {Uri} was throttled (429); retrying in {Delay} (attempt {Attempt} of {MaxAttempts}).",
+                request.RequestUri, delay, attempt, maxAttempts);
+            response.Dispose();
+            await Task.Delay(delay, cancellationToken);
+        }
+    }
+
+    private static TimeSpan? ResolveRetryAfter(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        if (retryAfter is null)
+        {
+            return null;
+        }
+
+        TimeSpan? delay = retryAfter.Delta
+            ?? (retryAfter.Date is { } date ? date - DateTimeOffset.UtcNow : null);
+        if (delay is null)
+        {
+            return null;
+        }
+
+        if (delay < TimeSpan.Zero) return TimeSpan.Zero;
+        return delay > TimeSpan.FromSeconds(30) ? TimeSpan.FromSeconds(30) : delay;
     }
 
     private static DateTimeOffset? ReadDate(JsonElement item, string propertyName) =>
