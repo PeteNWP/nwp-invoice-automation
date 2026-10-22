@@ -254,13 +254,14 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
     public async Task<IReadOnlyList<ProcessingCandidate>> ClaimForProcessingAsync(
         int batchSize, DateOnly? cutoff, int maxAttempts, CancellationToken cancellationToken)
     {
-        // CTE + UPDATE ... OUTPUT claims and locks the batch in one atomic statement. READPAST
-        // skips rows another worker is mid-claim on; UPDLOCK/ROWLOCK keep the claim exclusive.
+        // CTE + UPDATE ... OUTPUT claims and locks the batch in one atomic statement.
+        // UPDLOCK/ROWLOCK keep the claim exclusive. Do not use READPAST here: databases with
+        // READ_COMMITTED_SNAPSHOT enabled reject that hint under the default isolation level.
         const string sql = """
             WITH batch AS (
                 SELECT TOP (@BatchSize) Id, SiteId, DriveId, GraphItemId, AttachmentName, AttachmentMime,
                                         ProcessingStatus, ProcessingAttempts, ProcessingStartedAt, UpdatedAt
-                FROM dbo.CapturedDocument WITH (UPDLOCK, READPAST, ROWLOCK)
+                FROM dbo.CapturedDocument WITH (UPDLOCK, ROWLOCK)
                 WHERE IsDeleted = 0
                   AND DriveId IS NOT NULL AND GraphItemId IS NOT NULL
                   AND (ProcessingStatus = 0 OR (ProcessingStatus = 3 AND ProcessingAttempts < @MaxAttempts))
