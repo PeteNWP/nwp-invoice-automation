@@ -64,6 +64,16 @@ builder.Services.AddSingleton<GraphInboxReader>();
 builder.Services.AddHostedService<GraphInboxSyncWorker>();
 builder.Services.AddSingleton<IInvoiceExtractionRepository, InvoiceExtractionRepository>();
 builder.Services.AddScoped<InvoiceExtractionApiKeyFilter>();
+
+// Extraction worker: claims captured documents from SQL, sends each PDF to the Copilot Studio
+// workflow, and writes results to dbo.InvoiceExtraction. Inert unless CopilotExtraction:Enabled.
+builder.Services.Configure<CopilotExtractionOptions>(builder.Configuration.GetSection("CopilotExtraction"));
+builder.Services.AddHttpClient<ICopilotExtractionClient, CopilotExtractionClient>(client =>
+{
+    var seconds = builder.Configuration.GetValue("CopilotExtraction:HttpTimeoutSeconds", 150);
+    client.Timeout = TimeSpan.FromSeconds(Math.Max(30, seconds));
+});
+builder.Services.AddHostedService<InvoiceProcessingWorker>();
 builder.Services.AddSingleton<SupplierProfileStore>();
 builder.Services.AddSingleton<GraphBenchmarkClient>();
 builder.Services.AddSingleton<BenchmarkStore>();

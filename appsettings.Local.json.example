@@ -46,5 +46,15 @@
   },
   "InvoiceExtractionApi": {
     "ApiKey": "GENERATE_A_LONG_RANDOM_SECRET"
+  },
+  "CopilotExtraction": {
+    "Enabled": false,
+    "EndpointUrl": "PASTE_SIGNED_COPILOT_STUDIO_WORKFLOW_URL_HERE",
+    "BatchSize": 15,
+    "PollSeconds": 120,
+    "PerDocumentDelayMs": 1500,
+    "MaxAttempts": 3,
+    "HttpTimeoutSeconds": 150,
+    "CutoffDate": "2026-09-22"
   }
 }

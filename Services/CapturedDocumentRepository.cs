@@ -251,6 +251,74 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<ProcessingCandidate>> ClaimForProcessingAsync(
+        int batchSize, DateOnly? cutoff, int maxAttempts, CancellationToken cancellationToken)
+    {
+        // CTE + UPDATE ... OUTPUT claims and locks the batch in one atomic statement. READPAST
+        // skips rows another worker is mid-claim on; UPDLOCK/ROWLOCK keep the claim exclusive.
+        const string sql = """
+            WITH batch AS (
+                SELECT TOP (@BatchSize) Id, SiteId, DriveId, GraphItemId, AttachmentName, AttachmentMime,
+                                        ProcessingStatus, ProcessingAttempts
+                FROM dbo.CapturedDocument WITH (UPDLOCK, READPAST, ROWLOCK)
+                WHERE IsDeleted = 0
+                  AND DriveId IS NOT NULL AND GraphItemId IS NOT NULL
+                  AND (ProcessingStatus = 0 OR (ProcessingStatus = 3 AND ProcessingAttempts < @MaxAttempts))
+                  AND (@Cutoff IS NULL OR ReceivedDate >= @Cutoff)
+                ORDER BY ReceivedDate DESC, AttachmentName
+            )
+            UPDATE batch
+                SET ProcessingStatus = 1,
+                    ProcessingAttempts = ProcessingAttempts + 1,
+                    ProcessingStartedAt = SYSUTCDATETIME(),
+                    UpdatedAt = SYSUTCDATETIME()
+            OUTPUT inserted.Id, inserted.SiteId, inserted.DriveId, inserted.GraphItemId,
+                   inserted.AttachmentName, inserted.AttachmentMime;
+            """;
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@BatchSize", SqlDbType.Int).Value = Math.Max(1, batchSize);
+        command.Parameters.Add("@MaxAttempts", SqlDbType.Int).Value = Math.Max(1, maxAttempts);
+        Add(command, "@Cutoff", SqlDbType.Date, null, cutoff?.ToDateTime(TimeOnly.MinValue));
+
+        var claimed = new List<ProcessingCandidate>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            claimed.Add(new ProcessingCandidate(
+                reader.GetGuid(0),
+                NullableString(reader, "SiteId"),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.GetString(4),
+                NullableString(reader, "AttachmentMime")));
+        }
+        return claimed;
+    }
+
+    public async Task MarkProcessedAsync(
+        Guid id, ProcessingOutcome outcome, string? classifiedDocumentType, string? error, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE dbo.CapturedDocument
+                SET ProcessingStatus = @Status,
+                    ClassifiedDocumentType = @ClassifiedType,
+                    LastProcessingError = @Error,
+                    LastProcessedAt = SYSUTCDATETIME(),
+                    UpdatedAt = SYSUTCDATETIME()
+            WHERE Id = @Id
+            """;
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@Id", SqlDbType.UniqueIdentifier).Value = id;
+        command.Parameters.Add("@Status", SqlDbType.TinyInt).Value = (byte)outcome;
+        Add(command, "@ClassifiedType", SqlDbType.NVarChar, 60, Clean(classifiedDocumentType));
+        Add(command, "@Error", SqlDbType.NVarChar, -1, Clean(error));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     private const string SelectColumns = """
         SELECT Id, SiteId, DriveId, GraphItemId, Subject, FromName, FromAddress, OriginalMailbox, ToAddresses, CcAddresses,
                MessageId, InternetMessageId, ConversationId, EmailBodyPreview, ReceivedAt, ReceivedDate, AttachmentName, AttachmentMime,

@@ -40,4 +40,29 @@ public interface ICapturedDocumentRepository
     Task<CapturedDocument?> GetAsync(Guid id, CancellationToken cancellationToken);
     Task ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken);
     Task RecordSyncRunAsync(string syncKey, DateTimeOffset startedAt, bool succeeded, string? error, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Atomically claims up to <paramref name="batchSize"/> documents for extraction: selects
+    /// pending (and retryable-failed, under <paramref name="maxAttempts"/>) rows newest-first,
+    /// flips them to InProgress and increments their attempt count in one statement, so a second
+    /// worker/cycle can never pick the same document. The processing columns written here are not
+    /// part of the Graph sync MERGE, so a sync cycle cannot disturb the queue.
+    /// </summary>
+    Task<IReadOnlyList<ProcessingCandidate>> ClaimForProcessingAsync(
+        int batchSize, DateOnly? cutoff, int maxAttempts, CancellationToken cancellationToken);
+
+    /// <summary>Records the terminal result of an extraction attempt for one document.</summary>
+    Task MarkProcessedAsync(
+        Guid id, ProcessingOutcome outcome, string? classifiedDocumentType, string? error, CancellationToken cancellationToken);
+}
+
+/// <summary>A document claimed for extraction, with the Graph identity needed to fetch its PDF.</summary>
+public sealed record ProcessingCandidate(
+    Guid Id, string? SiteId, string DriveId, string GraphItemId, string FileName, string? ContentType);
+
+public enum ProcessingOutcome
+{
+    Extracted = 2,
+    Failed = 3,
+    Skipped = 4
 }
