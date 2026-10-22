@@ -18,17 +18,20 @@ public sealed class InvoiceProcessingWorker : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly CopilotExtractionOptions _options;
     private readonly IConfiguration _configuration;
+    private readonly ExtractionWorkerState _state;
     private readonly ILogger<InvoiceProcessingWorker> _logger;
 
     public InvoiceProcessingWorker(
         IServiceScopeFactory scopeFactory,
         IOptions<CopilotExtractionOptions> options,
         IConfiguration configuration,
+        ExtractionWorkerState state,
         ILogger<InvoiceProcessingWorker> logger)
     {
         _scopeFactory = scopeFactory;
         _options = options.Value;
         _configuration = configuration;
+        _state = state;
         _logger = logger;
     }
 
@@ -36,14 +39,22 @@ public sealed class InvoiceProcessingWorker : BackgroundService
     {
         if (!IsEnabled())
         {
-            _logger.LogInformation("InvoiceProcessingWorker is disabled (CopilotExtraction:Enabled is not true, GraphDocuments:Enabled is not true, or DocumentSource=Mock).");
+            _state.Enabled = false;
+            _state.DisabledReason = "CopilotExtraction:Enabled is not true, GraphDocuments:Enabled is not true, or DocumentSource=Mock.";
+            _logger.LogInformation("InvoiceProcessingWorker is disabled ({Reason}).", _state.DisabledReason);
             return;
         }
         if (string.IsNullOrWhiteSpace(_options.EndpointUrl))
         {
+            _state.Enabled = false;
+            _state.DisabledReason = "CopilotExtraction:EndpointUrl is not set.";
             _logger.LogWarning("InvoiceProcessingWorker is enabled but CopilotExtraction:EndpointUrl is not set; nothing will be processed.");
             return;
         }
+
+        _state.Enabled = true;
+        _logger.LogInformation("InvoiceProcessingWorker started (batch={Batch}, poll={Poll}s, cutoff={Cutoff}).",
+            _options.BatchSize, _options.PollSeconds, _options.CutoffDate ?? "(none)");
 
         var interval = TimeSpan.FromSeconds(Math.Max(15, _options.PollSeconds));
         using var timer = new PeriodicTimer(interval);
@@ -61,6 +72,7 @@ public sealed class InvoiceProcessingWorker : BackgroundService
             }
             catch (Exception ex)
             {
+                _state.LastError = ex.Message;
                 _logger.LogError(ex, "Invoice extraction cycle failed; will retry next interval.");
             }
         }
@@ -76,6 +88,8 @@ public sealed class InvoiceProcessingWorker : BackgroundService
         var extractions = scope.ServiceProvider.GetRequiredService<IInvoiceExtractionRepository>();
 
         var batch = await repository.ClaimForProcessingAsync(_options.BatchSize, cutoff, _options.MaxAttempts, cancellationToken);
+        _state.LastCycleAtUtc = DateTimeOffset.UtcNow;
+        _state.LastCycleClaimed = batch.Count;
         if (batch.Count == 0) return;
 
         _logger.LogInformation("Extraction cycle claimed {Count} document(s).", batch.Count);
@@ -107,6 +121,8 @@ public sealed class InvoiceProcessingWorker : BackgroundService
                 {
                     await repository.MarkProcessedAsync(candidate.Id, ProcessingOutcome.Failed, null,
                         "Copilot response could not be parsed as JSON.", cancellationToken);
+                    _state.TotalFailed++;
+                    _state.LastError = $"Unparseable response for {candidate.FileName}.";
                     _logger.LogWarning("Unparseable extraction response for {File}.", candidate.FileName);
                 }
                 else if (!parsed.LooksLikeInvoice)
@@ -115,6 +131,7 @@ public sealed class InvoiceProcessingWorker : BackgroundService
                     // Record the classification; don't pollute the extraction tables.
                     await repository.MarkProcessedAsync(candidate.Id, ProcessingOutcome.Skipped, parsed.DocumentType,
                         null, cancellationToken);
+                    _state.TotalSkipped++;
                     _logger.LogInformation("Skipped non-invoice {File} (documentType={Type}).", candidate.FileName, parsed.DocumentType);
                 }
                 else
@@ -122,6 +139,8 @@ public sealed class InvoiceProcessingWorker : BackgroundService
                     await extractions.UpsertAsync(parsed.Extraction, cancellationToken);
                     await repository.MarkProcessedAsync(candidate.Id, ProcessingOutcome.Extracted, parsed.DocumentType,
                         null, cancellationToken);
+                    _state.TotalExtracted++;
+                    _state.LastExtractedFile = candidate.FileName;
                     _logger.LogInformation(
                         "Extracted {File}: supplier={Supplier} invoice={Invoice} total={Total} lines={Lines}.",
                         candidate.FileName, parsed.Extraction.SupplierName, parsed.Extraction.InvoiceNumber,
@@ -136,6 +155,8 @@ public sealed class InvoiceProcessingWorker : BackgroundService
             {
                 // Leave status Failed with the error; ClaimForProcessingAsync retries it until MaxAttempts.
                 await repository.MarkProcessedAsync(candidate.Id, ProcessingOutcome.Failed, null, ex.Message, cancellationToken);
+                _state.TotalFailed++;
+                _state.LastError = $"{candidate.FileName}: {ex.Message}";
                 _logger.LogWarning(ex, "Extraction failed for {File}; will retry until MaxAttempts.", candidate.FileName);
             }
 
