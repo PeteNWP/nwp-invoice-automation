@@ -12,12 +12,13 @@
 else
 {
     var d = Model.Document;
+    var isException = d.Status == ClassificationStatus.Exception;
 
     <div class="page-heading">
         <div>
-            <p class="eyebrow">Resolve exception</p>
+            <p class="eyebrow">@(isException ? "Resolve exception" : "Review document")</p>
             <h1>@(d.InvoiceNumber ?? d.Subject)</h1>
-            <p class="muted">Correct this document, then choose which rules the system should remember for next time.</p>
+            <p class="muted">Check the classification and captured fields, correct them where needed, then choose what the system should remember.</p>
         </div>
         <div class="approval-summary">
             <strong>@(d.Status == ClassificationStatus.Exception ? "!" : "✓")</strong>
@@ -28,7 +29,7 @@ else
     @if (Model.Saved)
     {
         <div class="alert alert-success">
-            <strong>Resolved.</strong> The document has moved to the selected queue and the checked teaching rules have been saved in the mock supplier profile store.
+            <strong>Saved.</strong> The document has been classified and moved to the selected queue. Checked teaching rules have been saved in the current supplier-profile store.
         </div>
     }
 
@@ -172,8 +173,8 @@ else
                 </label>
 
                 <div class="resolution-actions">
-                    <button type="submit">Resolve and teach</button>
-                    <a class="secondary-link-button" asp-page="/Exceptions/Index">Back to exceptions</a>
+                    <button type="submit">@(isException ? "Resolve and teach" : "Save classification and teach")</button>
+                    <a class="secondary-link-button" asp-page="/Documents/Detail" asp-route-id="@d.Id">Back to document</a>
                 </div>
             </form>
         </section>

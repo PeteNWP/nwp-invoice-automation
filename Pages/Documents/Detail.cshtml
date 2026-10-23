@@ -18,6 +18,7 @@ else
             <h1>@(d.InvoiceNumber ?? d.Subject)</h1>
             <p class="muted">@d.Subject</p>
         </div>
+        <a class="primary-link-button" asp-page="/Exceptions/Resolve" asp-route-id="@d.Id">Review / classify</a>
     </div>
 
     <div class="order-workspace document-detail-workspace">

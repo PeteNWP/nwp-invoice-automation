@@ -190,6 +190,8 @@ button { background: #1464a5; border: 0; color: white; border-radius: 6px; paddi
 .history-search-form input { width: 100%; min-width: 0; }
 .history-search-actions { display: flex; gap: .45rem; align-items: center; flex-wrap: wrap; }
 .secondary-link-button { border: 1px solid #c9d5e3; background: white; color: #12395b; border-radius: 6px; padding: .5rem .8rem; text-decoration: none; font-weight: 700; }
+.primary-link-button { display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; padding: .58rem .9rem; background: #1464a5; color: white; text-decoration: none; font-weight: 800; white-space: nowrap; }
+.primary-link-button:hover { background: #0f4f84; }
 .history-scope { margin: .75rem 0 0; }
 .history-metrics { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .history-lines td, .history-lines th { vertical-align: middle; }
