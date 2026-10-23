@@ -20,7 +20,7 @@ else
         </div>
     </div>
 
-    <div class="order-workspace">
+    <div class="order-workspace document-detail-workspace">
         <div class="order-main">
             <div class="card">
                 <h2>Captured detail</h2>
@@ -104,12 +104,33 @@ else
             </div>
         </div>
 
-        <aside class="box-preview card">
-            <h2>Document preview</h2>
+        <aside class="box-preview document-preview-card card">
+            <div class="document-preview-heading">
+                <h2>Document preview</h2>
+                @if (!string.IsNullOrWhiteSpace(d.GraphItemId) || !string.IsNullOrWhiteSpace(d.AttachmentPreviewUrl))
+                {
+                    <button type="button" class="preview-expand-button" onclick="document.getElementById('document-preview-dialog').showModal()">Expand preview</button>
+                }
+            </div>
             @if (!string.IsNullOrWhiteSpace(d.GraphItemId) || !string.IsNullOrWhiteSpace(d.AttachmentPreviewUrl))
             {
-                <iframe src="@Url.Page("/Documents/Preview", new { id = d.Id })" title="@d.AttachmentName" style="width:100%; min-height:760px; border:0;"></iframe>
-                <p><a asp-page="/Documents/Preview" asp-route-id="@d.Id" target="_blank" rel="noopener">Open document in a new tab</a></p>
+                var previewUrl = Url.Page("/Documents/Preview", new { id = d.Id });
+                var readablePreviewUrl = $"{previewUrl}#view=FitH";
+                <iframe class="document-preview-frame" src="@readablePreviewUrl" title="@d.AttachmentName"></iframe>
+                <p class="preview-hint muted">Use “Expand preview” for a full-screen reading view.</p>
+
+                <dialog id="document-preview-dialog" class="document-preview-dialog">
+                    <div class="document-preview-dialog-shell">
+                        <div class="document-preview-dialog-heading">
+                            <div>
+                                <strong>@d.AttachmentName</strong>
+                                <span class="muted">Document preview</span>
+                            </div>
+                            <button type="button" class="preview-close-button" onclick="document.getElementById('document-preview-dialog').close()" aria-label="Close full-screen preview">Close</button>
+                        </div>
+                        <iframe src="@readablePreviewUrl" title="Expanded preview of @d.AttachmentName"></iframe>
+                    </div>
+                </dialog>
             }
             else
             {
@@ -121,4 +142,10 @@ else
     </div>
 
     <p><a asp-page="/Inbox/Index">← Back to inbox</a></p>
+
+    <script>
+        document.getElementById('document-preview-dialog')?.addEventListener('click', function (event) {
+            if (event.target === this) this.close();
+        });
+    </script>
 }

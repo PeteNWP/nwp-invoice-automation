@@ -50,12 +50,29 @@ else
                 <dt>Nested email</dt><dd>@(d.IsNestedEmail ? "Yes" : "No")</dd>
             </dl>
 
-            @if (!string.IsNullOrEmpty(d.AttachmentPreviewUrl))
+            @if (!string.IsNullOrWhiteSpace(d.GraphItemId) || !string.IsNullOrWhiteSpace(d.AttachmentPreviewUrl))
             {
+                var previewUrl = Url.Page("/Documents/Preview", new { id = d.Id });
                 <div class="pdf-preview-frame">
-                    <iframe src="@Url.Page("/Documents/Preview", new { id = d.Id })" title="Preview of @d.AttachmentName"></iframe>
-                    <p><a href="@Url.Page("/Documents/Preview", new { id = d.Id })" target="_blank" rel="noopener">Open original in new tab</a></p>
+                    <div class="document-preview-heading">
+                        <strong>PDF preview</strong>
+                        <button type="button" class="preview-expand-button" onclick="document.getElementById('exception-preview-dialog').showModal()">Expand preview</button>
+                    </div>
+                    <iframe src="@previewUrl" title="Preview of @d.AttachmentName"></iframe>
                 </div>
+
+                <dialog id="exception-preview-dialog" class="document-preview-dialog">
+                    <div class="document-preview-dialog-shell">
+                        <div class="document-preview-dialog-heading">
+                            <div>
+                                <strong>@d.AttachmentName</strong>
+                                <span class="muted">Review document</span>
+                            </div>
+                            <button type="button" class="preview-close-button" onclick="document.getElementById('exception-preview-dialog').close()" aria-label="Close full-screen preview">Close</button>
+                        </div>
+                        <iframe src="@previewUrl" title="Expanded preview of @d.AttachmentName"></iframe>
+                    </div>
+                </dialog>
             }
             else
             {
@@ -161,4 +178,10 @@ else
             </form>
         </section>
     </div>
+
+    <script>
+        document.getElementById('exception-preview-dialog')?.addEventListener('click', function (event) {
+            if (event.target === this) this.close();
+        });
+    </script>
 }
