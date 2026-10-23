@@ -42,7 +42,8 @@
     "LinesListId": "823f50ad-2c2f-4b75-a556-1a85f62527a3"
   },
   "ConnectionStrings": {
-    "InvoiceAutomation": "Server=YOUR_SQL_SERVER;Database=NWPInvoiceDev;User ID=YOUR_SQL_LOGIN;Password=YOUR_SQL_PASSWORD;Encrypt=True;TrustServerCertificate=False;"
+    "InvoiceAutomation": "Server=YOUR_SQL_SERVER;Database=NWPInvoiceDev;User ID=YOUR_SQL_LOGIN;Password=YOUR_SQL_PASSWORD;Encrypt=True;TrustServerCertificate=False;",
+    "NwpMaster": "Server=YOUR_SQL_SERVER;Database=NWPDev;User ID=YOUR_READ_ONLY_SQL_LOGIN;Password=YOUR_SQL_PASSWORD;Encrypt=True;TrustServerCertificate=False;"
   },
   "InvoiceExtractionApi": {
     "ApiKey": "GENERATE_A_LONG_RANDOM_SECRET"

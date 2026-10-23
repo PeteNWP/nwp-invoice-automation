@@ -29,7 +29,7 @@ else
     @if (Model.Saved)
     {
         <div class="alert alert-success">
-            <strong>Saved.</strong> The document has been classified and moved to the selected queue. Checked teaching rules have been saved in the current supplier-profile store.
+            <strong>Saved.</strong> The document has been classified and moved to the selected queue. The approved supplier identity and checked teaching rules have been saved.
         </div>
     }
 
@@ -97,17 +97,22 @@ else
 
                 <label>
                     <span>Supplier master</span>
-                    <input asp-for="Input.SupplierMasterName" list="supplier-master-list" autocomplete="off" />
+                    <input asp-for="Input.SupplierSearchLabel" list="supplier-master-list" autocomplete="off" placeholder="Search by reference or name" />
+                    <input asp-for="Input.NwpSupplierOid" type="hidden" />
                     <datalist id="supplier-master-list">
                         @foreach (var supplier in Model.Suppliers)
                         {
-                            <option value="@supplier.MasterName"></option>
+                            <option value="@supplier.DisplayLabel" data-oid="@supplier.Oid"></option>
                         }
                     </datalist>
-                    <span asp-validation-for="Input.SupplierMasterName" class="field-error"></span>
+                    <span asp-validation-for="Input.NwpSupplierOid" class="field-error"></span>
                     @if (!string.IsNullOrEmpty(d.DetectedSupplier))
                     {
-                        <small class="muted">Detected on document: @d.DetectedSupplier</small>
+                        <small class="muted">Observed on document: <strong>@d.DetectedSupplier</strong>. This is not an approved master match until you select a live supplier above.</small>
+                    }
+                    else if (!string.IsNullOrEmpty(d.SupplierMasterName) && string.IsNullOrEmpty(d.NwpSupplierOid))
+                    {
+                        <small class="muted">Previously recorded text: <strong>@d.SupplierMasterName</strong>. Select a live supplier to approve its identity.</small>
                     }
                 </label>
 
@@ -184,5 +189,16 @@ else
         document.getElementById('exception-preview-dialog')?.addEventListener('click', function (event) {
             if (event.target === this) this.close();
         });
+        (() => {
+            const search = document.getElementById('Input_SupplierSearchLabel');
+            const oid = document.getElementById('Input_NwpSupplierOid');
+            const options = [...document.querySelectorAll('#supplier-master-list option')];
+            const syncIdentity = () => {
+                const match = options.find(option => option.value === search.value);
+                oid.value = match?.dataset.oid ?? '';
+            };
+            search?.addEventListener('input', syncIdentity);
+            search?.addEventListener('change', syncIdentity);
+        })();
     </script>
 }

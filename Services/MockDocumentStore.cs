@@ -45,6 +45,8 @@ public sealed class MockDocumentStore : IDocumentStore
             : ClassificationStatus.Classified;
         doc.ExceptionReason = null;
         doc.SupplierMasterName = resolution.SupplierMasterName;
+        doc.NwpSupplierOid = resolution.NwpSupplierOid;
+        doc.NwpSupplierReference = resolution.NwpSupplierReference;
         doc.InvoiceNumber = resolution.InvoiceNumber;
         doc.InvoiceDate = resolution.InvoiceDate;
         doc.BatchOrReference = resolution.BatchOrReference;

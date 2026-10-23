@@ -205,6 +205,7 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
         const string sql = """
             UPDATE dbo.CapturedDocument SET
                 ResolvedStatus=@Status, ResolvedDocumentType=@DocumentType, SupplierMasterName=@SupplierMasterName,
+                NwpSupplierOID=@NwpSupplierOID, NwpSupplierReference=@NwpSupplierReference,
                 ResolvedInvoiceNumber=@InvoiceNumber, ResolvedInvoiceDate=@InvoiceDate, ResolvedReference=@Reference,
                 ResolvedTotal=@Total, ResolvedCurrency=@Currency, AssignedQueue=@AssignedQueue, WorkflowOwner=@WorkflowOwner,
                 ReviewerNote=@ReviewerNote, ExceptionReason=NULL, ResolvedAt=SYSUTCDATETIME(), UpdatedAt=SYSUTCDATETIME()
@@ -212,7 +213,8 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
             """;
         await using var connection = CreateConnection();
         await connection.OpenAsync(cancellationToken);
-        await using var command = new SqlCommand(sql, connection);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection, transaction);
         command.Parameters.Add("@Id", SqlDbType.UniqueIdentifier).Value = id;
         var status = string.Equals(resolution.AssignedQueue, "Ignored", StringComparison.OrdinalIgnoreCase)
             ? ClassificationStatus.Ignored
@@ -220,6 +222,8 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
         command.Parameters.Add("@Status", SqlDbType.Int).Value = (int)status;
         command.Parameters.Add("@DocumentType", SqlDbType.Int).Value = (int)resolution.DocumentType;
         Add(command, "@SupplierMasterName", SqlDbType.NVarChar, 300, Clean(resolution.SupplierMasterName));
+        Add(command, "@NwpSupplierOID", SqlDbType.NVarChar, 100, Clean(resolution.NwpSupplierOid));
+        Add(command, "@NwpSupplierReference", SqlDbType.NVarChar, 100, Clean(resolution.NwpSupplierReference));
         Add(command, "@InvoiceNumber", SqlDbType.NVarChar, 100, Clean(resolution.InvoiceNumber));
         Add(command, "@InvoiceDate", SqlDbType.Date, null, resolution.InvoiceDate?.ToDateTime(TimeOnly.MinValue));
         Add(command, "@Reference", SqlDbType.NVarChar, 100, Clean(resolution.BatchOrReference));
@@ -228,6 +232,42 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
         Add(command, "@AssignedQueue", SqlDbType.NVarChar, 100, Clean(resolution.AssignedQueue));
         Add(command, "@WorkflowOwner", SqlDbType.NVarChar, 200, Clean(resolution.WorkflowOwner));
         Add(command, "@ReviewerNote", SqlDbType.NVarChar, 1000, Clean(resolution.ResolutionNote));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        if (resolution.TaughtSupplierAlias && !string.IsNullOrWhiteSpace(resolution.ObservedSupplierName))
+            await UpsertSupplierIdentityMappingAsync(connection, transaction, resolution, cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    private static async Task UpsertSupplierIdentityMappingAsync(SqlConnection connection, SqlTransaction transaction,
+        ExceptionResolution resolution, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            DECLARE @Normalized nvarchar(300) = LOWER(LTRIM(RTRIM(@ObservedName)));
+            UPDATE dbo.SupplierIdentityMapping WITH (UPDLOCK, SERIALIZABLE)
+               SET ObservedSupplierName=@ObservedName, NwpSupplierOID=@NwpSupplierOID,
+                   NwpSupplierReference=@NwpSupplierReference, NwpSupplierName=@NwpSupplierName,
+                   ObservedSender=@ObservedSender, ObservedSenderDomain=@ObservedSenderDomain,
+                   IsActive=1, UpdatedAt=SYSUTCDATETIME(), UpdatedBy=@UpdatedBy,
+                   ConfirmationCount=ConfirmationCount + 1
+             WHERE NormalizedObservedSupplierName=@Normalized AND IsActive=1;
+            IF @@ROWCOUNT = 0
+                INSERT dbo.SupplierIdentityMapping
+                    (ObservedSupplierName, NormalizedObservedSupplierName, NwpSupplierOID, NwpSupplierReference,
+                     NwpSupplierName, ObservedSender, ObservedSenderDomain, IsActive, CreatedBy, UpdatedBy, ConfirmationCount)
+                VALUES
+                    (@ObservedName, @Normalized, @NwpSupplierOID, @NwpSupplierReference,
+                     @NwpSupplierName, @ObservedSender, @ObservedSenderDomain, 1, @UpdatedBy, @UpdatedBy, 1);
+            """;
+        await using var command = new SqlCommand(sql, connection, transaction);
+        Add(command, "@ObservedName", SqlDbType.NVarChar, 300, Clean(resolution.ObservedSupplierName));
+        Add(command, "@NwpSupplierOID", SqlDbType.NVarChar, 100, Clean(resolution.NwpSupplierOid));
+        Add(command, "@NwpSupplierReference", SqlDbType.NVarChar, 100, Clean(resolution.NwpSupplierReference));
+        Add(command, "@NwpSupplierName", SqlDbType.NVarChar, 300, Clean(resolution.SupplierMasterName));
+        Add(command, "@ObservedSender", SqlDbType.NVarChar, 320, Clean(resolution.ObservedSender));
+        Add(command, "@ObservedSenderDomain", SqlDbType.NVarChar, 255, Clean(resolution.ObservedSenderDomain));
+        Add(command, "@UpdatedBy", SqlDbType.NVarChar, 320, Clean(resolution.ResolvedBy));
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -324,7 +364,7 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
         SELECT Id, SiteId, DriveId, GraphItemId, Subject, FromName, FromAddress, OriginalMailbox, ToAddresses, CcAddresses,
                MessageId, InternetMessageId, ConversationId, EmailBodyPreview, ReceivedAt, ReceivedDate, AttachmentName, AttachmentMime,
                HasExtraction, DetectedSupplier, ExtractedInvoiceNumber, ExtractedInvoiceDate, ExtractedReference, ExtractedTotal, ExtractedCurrency,
-               ResolvedStatus, ResolvedDocumentType, SupplierMasterName, ResolvedInvoiceNumber, ResolvedInvoiceDate, ResolvedReference,
+               ResolvedStatus, ResolvedDocumentType, SupplierMasterName, NwpSupplierOID, NwpSupplierReference, ResolvedInvoiceNumber, ResolvedInvoiceDate, ResolvedReference,
                ResolvedTotal, ResolvedCurrency, AssignedQueue, WorkflowOwner, ReviewerNote, ExceptionReason
         FROM dbo.CapturedDocument
         """;
@@ -372,6 +412,8 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
                 : hasExtraction ? ClassificationStatus.Classified : ClassificationStatus.Unclassified,
             ExceptionReason = NullableString(r, "ExceptionReason"),
             SupplierMasterName = NullableString(r, "SupplierMasterName"),
+            NwpSupplierOid = NullableString(r, "NwpSupplierOID"),
+            NwpSupplierReference = NullableString(r, "NwpSupplierReference"),
             AssignedQueue = NullableString(r, "AssignedQueue") ?? "Incoming",
             WorkflowOwner = NullableString(r, "WorkflowOwner"),
             ReviewerNote = NullableString(r, "ReviewerNote")

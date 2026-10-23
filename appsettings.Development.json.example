@@ -1,4 +1,7 @@
 {
+  "ConnectionStrings": {
+    "NwpMaster": "Server=YOUR_SQL_SERVER;Database=NWPDev;Trusted_Connection=True;TrustServerCertificate=True;"
+  },
   "Logging": {
     "LogLevel": {
       "Default": "Information",

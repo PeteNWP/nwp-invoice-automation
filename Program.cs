@@ -16,6 +16,7 @@ builder.Services.Configure<BenchmarkGraphOptions>(builder.Configuration.GetSecti
 builder.Services.AddSingleton<UserAccessService>();
 builder.Services.AddHttpClient<IGraphDocumentClient, GraphDocumentClient>();
 builder.Services.AddHttpClient();
+builder.Services.AddMemoryCache();
 var mvc = builder.Services.AddControllersWithViews();
 
 if (authEnabled)
@@ -76,6 +77,7 @@ builder.Services.AddHttpClient<ICopilotExtractionClient, CopilotExtractionClient
 });
 builder.Services.AddHostedService<InvoiceProcessingWorker>();
 builder.Services.AddSingleton<SupplierProfileStore>();
+builder.Services.AddSingleton<INwpSupplierDirectory, NwpSupplierDirectory>();
 builder.Services.AddSingleton<GraphBenchmarkClient>();
 builder.Services.AddSingleton<BenchmarkStore>();
 

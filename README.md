@@ -131,3 +131,11 @@ calls Graph for inbox capture:
 
 Configure `ConnectionStrings:InvoiceAutomation` as above; no separate connection string is
 needed for the document cache.
+
+## Live supplier master and identity mapping
+
+Apply `sql/004_supplier_identity_mapping.sql` to `NWPInvoiceDev` after the captured-document
+migrations. Configure `ConnectionStrings:NwpMaster` with read-only access to
+`NWPDev.dbo.Supplier`. Review pages cache that live directory for 15 minutes and persist the
+selected supplier OID/reference/name; approved aliases are stored locally in
+`dbo.SupplierIdentityMapping` without a cross-database foreign key.

@@ -45,6 +45,8 @@ public sealed class CapturedDocument
     // --- Supplier / invoice metadata (best-effort at capture time) ---
     public string? DetectedSupplier { get; set; }
     public string? SupplierMasterName { get; set; }
+    public string? NwpSupplierOid { get; set; }
+    public string? NwpSupplierReference { get; set; }
     public string? InvoiceNumber { get; set; }
     public DateOnly? InvoiceDate { get; set; }
     public string? BatchOrReference { get; set; }
