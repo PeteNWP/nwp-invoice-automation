@@ -16,6 +16,8 @@ public sealed class InvoiceExtractionRequest
     [Range(0d, 1d)] public decimal? Confidence { get; init; }
     [StringLength(100)] public string? Model { get; init; }
     public DateTimeOffset? ExtractedAt { get; init; }
+    /// <summary>Full raw JSON body returned by the Copilot workflow, retained for diagnosis.</summary>
+    public string? RawResponse { get; init; }
     [Required, MaxLength(500)] public List<InvoiceExtractionLineRequest> Lines { get; init; } = [];
 }
 
@@ -77,6 +79,7 @@ public sealed class InvoiceExtraction
     public string? ReviewedBy { get; init; }
     public string? ReviewNote { get; init; }
     public long ReviewRevision { get; init; }
+    public string? RawResponse { get; init; }
     public IReadOnlyList<InvoiceExtractionLine> Lines { get; init; } = [];
 }
 

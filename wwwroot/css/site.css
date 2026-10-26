@@ -317,6 +317,9 @@ button { background: #1464a5; border: 0; color: white; border-radius: 6px; paddi
 .teach-fieldset legend { color: #12395b; font-weight: 900; padding: 0 .35rem; }
 .checkbox-row { display: flex !important; grid-template-columns: none !important; flex-direction: row; align-items: flex-start; gap: .55rem; margin: .45rem 0; font-weight: 650 !important; }
 .checkbox-row input { width: auto; margin-top: .22rem; }
+.raw-response-viewer { margin-top: 1rem; border: 1px solid #c9d5e3; border-radius: 10px; padding: .6rem .8rem; }
+.raw-response-viewer summary { cursor: pointer; font-weight: 800; color: #12395b; }
+.raw-response-json { margin-top: .6rem; max-height: 360px; overflow: auto; background: #0f2436; color: #e6eef6; border-radius: 8px; padding: .7rem .8rem; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .8rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
 .resolution-actions { display: flex; gap: .55rem; flex-wrap: wrap; align-items: center; }
 @media (max-width: 950px) { .exception-resolution-workspace, .form-grid-2 { grid-template-columns: 1fr; } }
 

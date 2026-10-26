@@ -57,6 +57,7 @@ public static class CopilotExtractionResponse
                 Confidence = Dec(root, "confidence"),
                 Model = model,
                 ExtractedAt = DateTimeOffset.UtcNow,
+                RawResponse = json,
                 Lines = lines
             };
 

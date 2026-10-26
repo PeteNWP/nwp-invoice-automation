@@ -88,6 +88,22 @@ else
             {
                 <div class="alert alert-warning"><strong>Reviewer note:</strong> @d.ReviewerNote</div>
             }
+
+            @if (d.Extraction is not null)
+            {
+                <details class="raw-response-viewer">
+                    <summary>Raw AI response</summary>
+                    @if (!string.IsNullOrWhiteSpace(d.Extraction.RawResponse))
+                    {
+                        <p class="muted">Exactly what the Copilot workflow returned for this document. Compare it against the captured fields to spot a mismatch (for example a response belonging to a different invoice).</p>
+                        <pre class="raw-response-json">@d.Extraction.RawResponse</pre>
+                    }
+                    else
+                    {
+                        <p class="muted">No raw response was retained for this extraction. Responses are only captured from the next extraction onward.</p>
+                    }
+                </details>
+            }
         </section>
 
         <section class="card correction-panel">

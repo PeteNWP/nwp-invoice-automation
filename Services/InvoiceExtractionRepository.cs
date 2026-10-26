@@ -37,15 +37,15 @@ public sealed class InvoiceExtractionRepository : IInvoiceExtractionRepository
                 IF @Id IS NULL
                 BEGIN
                     INSERT dbo.InvoiceExtraction
-                        (DriveId, DriveItemId, SiteId, SupplierName, InvoiceNumber, InvoiceDate, Reference, Currency, Total, Confidence, Model, ExtractedAt)
+                        (DriveId, DriveItemId, SiteId, SupplierName, InvoiceNumber, InvoiceDate, Reference, Currency, Total, Confidence, Model, ExtractedAt, RawResponse)
                     VALUES
-                        (@DriveId, @DriveItemId, @SiteId, @SupplierName, @InvoiceNumber, @InvoiceDate, @Reference, @Currency, @Total, @Confidence, @Model, @ExtractedAt);
+                        (@DriveId, @DriveItemId, @SiteId, @SupplierName, @InvoiceNumber, @InvoiceDate, @Reference, @Currency, @Total, @Confidence, @Model, @ExtractedAt, @RawResponse);
                     SET @Id = SCOPE_IDENTITY(); SET @Created = 1;
                 END
                 ELSE IF NOT EXISTS (SELECT 1 FROM dbo.InvoiceExtraction WHERE Id=@Id AND ReviewStatus=2)
                     UPDATE dbo.InvoiceExtraction SET SiteId=@SiteId, SupplierName=@SupplierName, InvoiceNumber=@InvoiceNumber,
                         InvoiceDate=@InvoiceDate, Reference=@Reference, Currency=@Currency, Total=@Total, Confidence=@Confidence,
-                        Model=@Model, ExtractedAt=@ExtractedAt, UpdatedAt=SYSUTCDATETIME() WHERE Id=@Id;
+                        Model=@Model, ExtractedAt=@ExtractedAt, RawResponse=@RawResponse, UpdatedAt=SYSUTCDATETIME() WHERE Id=@Id;
                 SELECT @Id, @Created;
                 """;
             await using var command = new SqlCommand(headerSql, connection, transaction);
@@ -61,6 +61,7 @@ public sealed class InvoiceExtractionRepository : IInvoiceExtractionRepository
             AddDecimal(command, "@Confidence", request.Confidence, 6, 5);
             Add(command, "@Model", SqlDbType.NVarChar, 100, Clean(request.Model));
             Add(command, "@ExtractedAt", SqlDbType.DateTimeOffset, null, request.ExtractedAt ?? DateTimeOffset.UtcNow);
+            Add(command, "@RawResponse", SqlDbType.NVarChar, -1, Clean(request.RawResponse));
 
             long id; bool created;
             await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
@@ -110,7 +111,7 @@ public sealed class InvoiceExtractionRepository : IInvoiceExtractionRepository
         }
         command.CommandText = $"""
             SELECT e.Id,e.DriveId,e.DriveItemId,e.SiteId,e.SupplierName,e.InvoiceNumber,e.InvoiceDate,e.Reference,e.Currency,e.Total,e.Confidence,e.Model,e.ExtractedAt,
-                   e.ReviewStatus,e.ReviewedAt,e.ReviewedBy,e.ReviewNote,e.ReviewRevision,
+                   e.ReviewStatus,e.ReviewedAt,e.ReviewedBy,e.ReviewNote,e.ReviewRevision,e.RawResponse,
                    l.LineNumber,l.Sku,l.Description,l.Quantity,l.UnitPrice,l.LineTotal
             FROM dbo.InvoiceExtraction e LEFT JOIN dbo.InvoiceExtractionLine l ON l.InvoiceExtractionId=e.Id
             WHERE {string.Join(" OR ", predicates)} ORDER BY e.Id,l.LineNumber
@@ -122,12 +123,12 @@ public sealed class InvoiceExtractionRepository : IInvoiceExtractionRepository
             var id = reader.GetInt64(0);
             if (!builders.TryGetValue(id, out var entry))
             {
-                entry = (new InvoiceExtraction { Id=id, DriveId=reader.GetString(1), DriveItemId=reader.GetString(2), SiteId=NullableString(reader,3), SupplierName=NullableString(reader,4), InvoiceNumber=NullableString(reader,5), InvoiceDate=reader.IsDBNull(6)?null:DateOnly.FromDateTime(reader.GetDateTime(6)), Reference=NullableString(reader,7), Currency=NullableString(reader,8), Total=NullableDecimal(reader,9), Confidence=NullableDecimal(reader,10), Model=NullableString(reader,11), ExtractedAt=reader.GetDateTimeOffset(12), ReviewStatus=(ExtractionReviewStatus)reader.GetByte(13), ReviewedAt=reader.IsDBNull(14)?null:reader.GetDateTimeOffset(14), ReviewedBy=NullableString(reader,15), ReviewNote=NullableString(reader,16), ReviewRevision=reader.GetInt64(17) }, []);
+                entry = (new InvoiceExtraction { Id=id, DriveId=reader.GetString(1), DriveItemId=reader.GetString(2), SiteId=NullableString(reader,3), SupplierName=NullableString(reader,4), InvoiceNumber=NullableString(reader,5), InvoiceDate=reader.IsDBNull(6)?null:DateOnly.FromDateTime(reader.GetDateTime(6)), Reference=NullableString(reader,7), Currency=NullableString(reader,8), Total=NullableDecimal(reader,9), Confidence=NullableDecimal(reader,10), Model=NullableString(reader,11), ExtractedAt=reader.GetDateTimeOffset(12), ReviewStatus=(ExtractionReviewStatus)reader.GetByte(13), ReviewedAt=reader.IsDBNull(14)?null:reader.GetDateTimeOffset(14), ReviewedBy=NullableString(reader,15), ReviewNote=NullableString(reader,16), ReviewRevision=reader.GetInt64(17), RawResponse=NullableString(reader,18) }, []);
                 builders[id] = entry;
             }
-            if (!reader.IsDBNull(18)) entry.Lines.Add(new InvoiceExtractionLine { LineNumber=reader.GetInt32(18), Sku=NullableString(reader,19), Description=reader.GetString(20), Quantity=NullableDecimal(reader,21), UnitPrice=NullableDecimal(reader,22), LineTotal=NullableDecimal(reader,23) });
+            if (!reader.IsDBNull(19)) entry.Lines.Add(new InvoiceExtractionLine { LineNumber=reader.GetInt32(19), Sku=NullableString(reader,20), Description=reader.GetString(21), Quantity=NullableDecimal(reader,22), UnitPrice=NullableDecimal(reader,23), LineTotal=NullableDecimal(reader,24) });
         }
-        return builders.Values.Select(x => new InvoiceExtraction { Id=x.Header.Id, DriveId=x.Header.DriveId, DriveItemId=x.Header.DriveItemId, SiteId=x.Header.SiteId, SupplierName=x.Header.SupplierName, InvoiceNumber=x.Header.InvoiceNumber, InvoiceDate=x.Header.InvoiceDate, Reference=x.Header.Reference, Currency=x.Header.Currency, Total=x.Header.Total, Confidence=x.Header.Confidence, Model=x.Header.Model, ExtractedAt=x.Header.ExtractedAt, ReviewStatus=x.Header.ReviewStatus, ReviewedAt=x.Header.ReviewedAt, ReviewedBy=x.Header.ReviewedBy, ReviewNote=x.Header.ReviewNote, ReviewRevision=x.Header.ReviewRevision, Lines=x.Lines }).ToDictionary(x => (x.DriveId, x.DriveItemId));
+        return builders.Values.Select(x => new InvoiceExtraction { Id=x.Header.Id, DriveId=x.Header.DriveId, DriveItemId=x.Header.DriveItemId, SiteId=x.Header.SiteId, SupplierName=x.Header.SupplierName, InvoiceNumber=x.Header.InvoiceNumber, InvoiceDate=x.Header.InvoiceDate, Reference=x.Header.Reference, Currency=x.Header.Currency, Total=x.Header.Total, Confidence=x.Header.Confidence, Model=x.Header.Model, ExtractedAt=x.Header.ExtractedAt, ReviewStatus=x.Header.ReviewStatus, ReviewedAt=x.Header.ReviewedAt, ReviewedBy=x.Header.ReviewedBy, ReviewNote=x.Header.ReviewNote, ReviewRevision=x.Header.ReviewRevision, RawResponse=x.Header.RawResponse, Lines=x.Lines }).ToDictionary(x => (x.DriveId, x.DriveItemId));
     }
 
     public async Task SaveReviewAsync(InvoiceExtractionReview review, CancellationToken cancellationToken)
