@@ -123,7 +123,18 @@ public sealed class SqlCapturedDocumentStore : IDocumentStore
             {
                 document.Status = ClassificationStatus.ReviewRequired;
             }
-            if (document.Status == ClassificationStatus.ReviewRequired
+            // Customs/ENS declarations (HMRC CDS entries) carry invoice-shaped fields but must
+            // not be treated as supplier invoices. Route them out of the invoice queue even if an
+            // older extraction row already exists, without needing a reprocess.
+            if (document.Status is ClassificationStatus.ReviewRequired or ClassificationStatus.Classified
+                && extraction.ReviewStatus != ExtractionReviewStatus.Approved
+                && DocumentClassification.IsCustomsDeclaration(document.Subject, document.AttachmentName, extraction.RawResponse))
+            {
+                document.DocumentType = DocumentType.EnsCustomsSecurity;
+                document.Status = ClassificationStatus.Exception;
+                document.ExceptionReason = DocumentClassification.CustomsExceptionReason;
+            }
+            else if (document.Status == ClassificationStatus.ReviewRequired
                 && document.Subject.Contains("statement", StringComparison.OrdinalIgnoreCase))
             {
                 document.Status = ClassificationStatus.Exception;

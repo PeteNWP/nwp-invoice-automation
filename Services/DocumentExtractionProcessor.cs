@@ -58,6 +58,15 @@ public sealed class DocumentExtractionProcessor
             return new DocumentExtractionResult(ProcessingOutcome.Failed, null, null, error);
         }
 
+        // Customs/ENS declarations carry invoice-shaped fields but are not supplier invoices.
+        // Keep them out of the extraction tables entirely rather than scoring them as invoices.
+        if (DocumentClassification.IsCustomsDeclaration(candidate.FileName, json))
+        {
+            const string customsType = nameof(DocumentType.EnsCustomsSecurity);
+            await _documents.MarkProcessedAsync(candidate.Id, ProcessingOutcome.Skipped, customsType, null, cancellationToken);
+            return new DocumentExtractionResult(ProcessingOutcome.Skipped, customsType, null, null);
+        }
+
         if (!parsed.LooksLikeInvoice)
         {
             await _documents.MarkProcessedAsync(candidate.Id, ProcessingOutcome.Skipped, parsed.DocumentType, null, cancellationToken);
