@@ -17,6 +17,7 @@ public sealed class IndexModel : PageModel
 
     public int Total { get; private set; }
     public int Invoices { get; private set; }
+    public int Reviewed { get; private set; }
     public int Statements { get; private set; }
     public int Exceptions { get; private set; }
     public int Ignored { get; private set; }
@@ -26,7 +27,8 @@ public sealed class IndexModel : PageModel
     {
         var all = await _docs.AllAsync(cancellationToken);
         Total = all.Count;
-        Invoices = all.Count(d => d.DocumentType == DocumentType.Invoice && d.Status == ClassificationStatus.Classified);
+        Invoices = all.Count(Nwp.InvoiceAutomation.Web.Pages.Invoices.IndexModel.IsActiveQueueDocument);
+        Reviewed = all.Count(Nwp.InvoiceAutomation.Web.Pages.Reviewed.IndexModel.IsReviewedDocument);
         Statements = all.Count(d => d.DocumentType == DocumentType.Statement);
         Exceptions = all.Count(d => d.Status == ClassificationStatus.Exception);
         Ignored = all.Count(d => d.Status == ClassificationStatus.Ignored);

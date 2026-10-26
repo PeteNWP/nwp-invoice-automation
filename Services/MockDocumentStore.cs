@@ -42,7 +42,7 @@ public sealed class MockDocumentStore : IDocumentStore
         doc.DocumentType = resolution.DocumentType;
         doc.Status = resolution.AssignedQueue == "Ignored"
             ? ClassificationStatus.Ignored
-            : ClassificationStatus.Classified;
+            : resolution.MarkReviewed ? ClassificationStatus.Classified : ClassificationStatus.ReviewRequired;
         doc.ExceptionReason = null;
         doc.SupplierMasterName = resolution.SupplierMasterName;
         doc.NwpSupplierOid = resolution.NwpSupplierOid;

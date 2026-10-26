@@ -15,6 +15,8 @@ public sealed class ExceptionResolution
     public decimal? Total { get; init; }
     public string Currency { get; init; } = "GBP";
     public string AssignedQueue { get; init; } = "Invoice Queue";
+    /// <summary>True only when the reviewer explicitly approved the live extraction.</summary>
+    public bool MarkReviewed { get; init; }
     public string? WorkflowOwner { get; init; }
     public bool TaughtSupplierAlias { get; init; }
     public bool TaughtNestedEmailRule { get; init; }

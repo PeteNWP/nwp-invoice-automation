@@ -115,6 +115,14 @@ public sealed class SqlCapturedDocumentStore : IDocumentStore
                 document.DocumentType = DocumentType.Invoice;
                 document.Status = ClassificationStatus.ReviewRequired;
             }
+            // Older "Save for further review" posts resolved the captured document as
+            // Classified even though the extraction remained unapproved. Normalise those
+            // rows back into the active review queue; only explicit human approval is reviewed.
+            if (document.Status == ClassificationStatus.Classified
+                && extraction.ReviewStatus != ExtractionReviewStatus.Approved)
+            {
+                document.Status = ClassificationStatus.ReviewRequired;
+            }
             if (document.Status == ClassificationStatus.ReviewRequired
                 && document.Subject.Contains("statement", StringComparison.OrdinalIgnoreCase))
             {

@@ -1,0 +1,139 @@
+@page
+@using System.Globalization
+@model Nwp.InvoiceAutomation.Web.Pages.Reviewed.IndexModel
+
+<div class="page-heading">
+    <div>
+        <p class="eyebrow">Archive</p>
+        <h1>Reviewed invoices</h1>
+        <p class="muted">Human-approved supplier invoices. Open a record or preview its original PDF without returning it to the active Invoice Queue.</p>
+    </div>
+    <div class="approval-summary">
+        <strong>@Model.Documents.Count</strong>
+        <span>reviewed</span>
+    </div>
+</div>
+
+@if (!Model.Documents.Any())
+{
+    <div class="card empty-state">
+        <p class="muted">No invoices have been reviewed yet.</p>
+    </div>
+}
+else
+{
+    <div class="card approval-card invoice-queue-card">
+        <table class="doc-table invoice-queue-table">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Observed supplier</th>
+                    <th>NWP supplier</th>
+                    <th>Invoice / Ref</th>
+                    <th>Invoice date</th>
+                    <th>Total</th>
+                    <th>Date received</th>
+                    <th>Reviewed</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in Model.Documents)
+                {
+                    var previewUrl = !string.IsNullOrWhiteSpace(d.GraphItemId) || !string.IsNullOrWhiteSpace(d.AttachmentPreviewUrl)
+                        ? Url.Page("/Documents/Preview", new { id = d.Id })
+                        : null;
+                    var invoiceOrReference = !string.IsNullOrWhiteSpace(d.InvoiceNumber) ? d.InvoiceNumber : d.BatchOrReference;
+                    <tr>
+                        <td class="invoice-queue-subject">
+                            <strong>@(string.IsNullOrWhiteSpace(d.Subject) ? "—" : d.Subject)</strong>
+                            <div class="muted">@d.AttachmentName</div>
+                        </td>
+                        <td>@(d.DetectedSupplier ?? "—")</td>
+                        <td>
+                            <strong>@(d.SupplierMasterName ?? "—")</strong>
+                            @if (!string.IsNullOrWhiteSpace(d.NwpSupplierReference))
+                            {
+                                <div class="muted">@d.NwpSupplierReference</div>
+                            }
+                        </td>
+                        <td>
+                            @(invoiceOrReference ?? "—")
+                            @if (!string.IsNullOrWhiteSpace(d.InvoiceNumber)
+                                && !string.IsNullOrWhiteSpace(d.BatchOrReference)
+                                && !string.Equals(d.InvoiceNumber, d.BatchOrReference, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="muted">Ref: @d.BatchOrReference</div>
+                            }
+                        </td>
+                        <td>@(d.InvoiceDate?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "—")</td>
+                        <td>@(d.Total is { } total ? $"{d.Currency} {total.ToString("N2", CultureInfo.InvariantCulture)}" : "—")</td>
+                        <td>@(d.ReceivedDate == default ? "—" : d.ReceivedDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture))</td>
+                        <td>
+                            <span class="status-flag flag-classified">Reviewed</span>
+                            @if (d.Extraction?.ReviewedAt is { } reviewedAt)
+                            {
+                                <div class="muted">@reviewedAt.ToString("dd MMM yyyy HH:mm", CultureInfo.InvariantCulture)</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(d.Extraction?.ReviewedBy))
+                            {
+                                <div class="muted">@d.Extraction.ReviewedBy</div>
+                            }
+                        </td>
+                        <td>
+                            <div class="document-row-actions invoice-queue-actions">
+                                <a asp-page="/Documents/Detail" asp-route-id="@d.Id">Open</a>
+                                <a asp-page="/Exceptions/Resolve" asp-route-id="@d.Id">Review</a>
+                                @if (previewUrl is not null)
+                                {
+                                    <button type="button"
+                                            class="queue-preview-button reviewed-preview-button"
+                                            data-preview-url="@previewUrl"
+                                            data-preview-title="@d.AttachmentName">
+                                        PDF Preview
+                                    </button>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <dialog id="reviewed-preview-dialog" class="document-preview-dialog" aria-labelledby="reviewed-preview-title">
+        <div class="document-preview-dialog-shell">
+            <div class="document-preview-dialog-heading">
+                <div>
+                    <strong id="reviewed-preview-title">PDF preview</strong>
+                    <span class="muted">Reviewed invoices</span>
+                </div>
+                <button type="button" class="preview-close-button" data-preview-close aria-label="Close PDF preview">Close</button>
+            </div>
+            <iframe title="Reviewed invoice PDF preview"></iframe>
+        </div>
+    </dialog>
+
+    <script>
+        (() => {
+            const dialog = document.getElementById('reviewed-preview-dialog');
+            const frame = dialog?.querySelector('iframe');
+            const title = document.getElementById('reviewed-preview-title');
+            if (!dialog || !frame || !title) return;
+
+            document.querySelectorAll('.reviewed-preview-button[data-preview-url]').forEach(button => {
+                button.addEventListener('click', () => {
+                    title.textContent = button.dataset.previewTitle || 'PDF preview';
+                    frame.src = `${button.dataset.previewUrl}#view=FitH`;
+                    dialog.showModal();
+                });
+            });
+
+            dialog.querySelector('[data-preview-close]')?.addEventListener('click', () => dialog.close());
+            dialog.addEventListener('click', event => {
+                if (event.target === dialog) dialog.close();
+            });
+            dialog.addEventListener('close', () => frame.removeAttribute('src'));
+        })();
+    </script>
+}

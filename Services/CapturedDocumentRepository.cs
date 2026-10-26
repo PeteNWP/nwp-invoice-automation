@@ -218,7 +218,7 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
         command.Parameters.Add("@Id", SqlDbType.UniqueIdentifier).Value = id;
         var status = string.Equals(resolution.AssignedQueue, "Ignored", StringComparison.OrdinalIgnoreCase)
             ? ClassificationStatus.Ignored
-            : ClassificationStatus.Classified;
+            : resolution.MarkReviewed ? ClassificationStatus.Classified : ClassificationStatus.ReviewRequired;
         command.Parameters.Add("@Status", SqlDbType.Int).Value = (int)status;
         command.Parameters.Add("@DocumentType", SqlDbType.Int).Value = (int)resolution.DocumentType;
         Add(command, "@SupplierMasterName", SqlDbType.NVarChar, 300, Clean(resolution.SupplierMasterName));

@@ -1,11 +1,12 @@
 @page
+@using System.Globalization
 @model Nwp.InvoiceAutomation.Web.Pages.Invoices.IndexModel
 
 <div class="page-heading">
     <div>
         <p class="eyebrow">Queue</p>
         <h1>Invoice queue</h1>
-        <p class="muted">Documents classified as supplier invoices and ready to capture. Items needing attention sit in Exceptions until resolved.</p>
+        <p class="muted">Review the key invoice headers here. Use Review for corrections or line detail; correctly mapped invoices can be marked Reviewed directly.</p>
     </div>
     <div class="approval-summary">
         <strong>@Model.Documents.Count</strong>
@@ -13,4 +14,147 @@
     </div>
 </div>
 
-<partial name="_DocumentTable" model="Model.Documents" />
+@if (!string.IsNullOrWhiteSpace(Model.SuccessMessage))
+{
+    <div class="alert alert-success"><strong>Reviewed.</strong> @Model.SuccessMessage</div>
+}
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div asp-validation-summary="All" class="alert alert-error"></div>
+}
+
+@if (!Model.Documents.Any())
+{
+    <div class="card empty-state">
+        <p class="muted">Nothing here yet.</p>
+    </div>
+}
+else
+{
+    <div class="card approval-card invoice-queue-card">
+        <table class="doc-table invoice-queue-table">
+            <thead>
+                <tr>
+                    <th>Subject</th>
+                    <th>Observed supplier</th>
+                    <th>NWP supplier</th>
+                    <th>Invoice / Ref</th>
+                    <th>Invoice date</th>
+                    <th>Total</th>
+                    <th>Date received</th>
+                    <th>Status / actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in Model.Documents)
+                {
+                    var extraction = d.Extraction;
+                    var blockers = Model.QuickApprovalBlockers.TryGetValue(d.Id, out var reasons) ? reasons : Array.Empty<string>();
+                    var reviewComplete = extraction?.ReviewStatus == ExtractionReviewStatus.Approved
+                        && d.Status == ClassificationStatus.Classified;
+                    var hasPreview = !string.IsNullOrWhiteSpace(d.GraphItemId) || !string.IsNullOrWhiteSpace(d.AttachmentPreviewUrl);
+                    var previewUrl = hasPreview ? Url.Page("/Documents/Preview", new { id = d.Id }) : null;
+                    var invoiceOrReference = !string.IsNullOrWhiteSpace(d.InvoiceNumber) ? d.InvoiceNumber : d.BatchOrReference;
+                    <tr>
+                        <td class="invoice-queue-subject">
+                            <strong>@(string.IsNullOrWhiteSpace(d.Subject) ? "—" : d.Subject)</strong>
+                            <div class="muted">@d.AttachmentName</div>
+                        </td>
+                        <td>@(d.DetectedSupplier ?? "—")</td>
+                        <td>
+                            <strong>@(d.SupplierMasterName ?? "—")</strong>
+                            @if (!string.IsNullOrWhiteSpace(d.NwpSupplierReference))
+                            {
+                                <div class="muted">@d.NwpSupplierReference</div>
+                            }
+                        </td>
+                        <td>
+                            @(invoiceOrReference ?? "—")
+                            @if (!string.IsNullOrWhiteSpace(d.InvoiceNumber)
+                                && !string.IsNullOrWhiteSpace(d.BatchOrReference)
+                                && !string.Equals(d.InvoiceNumber, d.BatchOrReference, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="muted">Ref: @d.BatchOrReference</div>
+                            }
+                        </td>
+                        <td>@(d.InvoiceDate?.ToString("dd MMM yyyy", CultureInfo.InvariantCulture) ?? "—")</td>
+                        <td>@(d.Total is { } total ? $"{d.Currency} {total.ToString("N2", CultureInfo.InvariantCulture)}" : "—")</td>
+                        <td>@(d.ReceivedDate == default ? "—" : d.ReceivedDate.ToString("dd MMM yyyy", CultureInfo.InvariantCulture))</td>
+                        <td>
+                            <div class="invoice-queue-status">
+                                <span class="status-flag @(reviewComplete ? "flag-classified" : "flag-review")">
+                                    @(reviewComplete ? "Reviewed" : "Review needed")
+                                </span>
+                            </div>
+                            <div class="document-row-actions invoice-queue-actions">
+                                <a asp-page="/Documents/Detail" asp-route-id="@d.Id">Open</a>
+                                <a asp-page="/Exceptions/Resolve" asp-route-id="@d.Id">Review</a>
+                                @if (hasPreview)
+                                {
+                                    <button type="button"
+                                            class="queue-preview-button"
+                                            data-preview-url="@previewUrl"
+                                            data-preview-title="@d.AttachmentName">
+                                        PDF Preview
+                                    </button>
+                                }
+                            </div>
+
+                            @if (!reviewComplete && blockers.Count == 0)
+                            {
+                                <form method="post" asp-page-handler="QuickApprove" class="quick-approve-form">
+                                    <input type="hidden" name="id" value="@d.Id" />
+                                    <input type="hidden" name="expectedRevision" value="@(extraction!.ReviewRevision)" />
+                                    <button type="submit" class="quick-approve-button">Mark Reviewed</button>
+                                </form>
+                            }
+                            else if (!reviewComplete && blockers.Count > 0)
+                            {
+                                <div class="quick-approval-guidance">
+                                    Quick approval unavailable: @(string.Join("; ", blockers)). <a asp-page="/Exceptions/Resolve" asp-route-id="@d.Id">Use Review</a>.
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <dialog id="invoice-queue-preview-dialog" class="document-preview-dialog" aria-labelledby="invoice-queue-preview-title">
+        <div class="document-preview-dialog-shell">
+            <div class="document-preview-dialog-heading">
+                <div>
+                    <strong id="invoice-queue-preview-title">PDF preview</strong>
+                    <span class="muted">Invoice queue</span>
+                </div>
+                <button type="button" class="preview-close-button" data-preview-close aria-label="Close PDF preview">Close</button>
+            </div>
+            <iframe title="Invoice PDF preview"></iframe>
+        </div>
+    </dialog>
+
+    <script>
+        (() => {
+            const dialog = document.getElementById('invoice-queue-preview-dialog');
+            const frame = dialog?.querySelector('iframe');
+            const title = document.getElementById('invoice-queue-preview-title');
+            if (!dialog || !frame || !title) return;
+
+            document.querySelectorAll('.queue-preview-button[data-preview-url]').forEach(button => {
+                button.addEventListener('click', () => {
+                    title.textContent = button.dataset.previewTitle || 'PDF preview';
+                    frame.src = `${button.dataset.previewUrl}#view=FitH`;
+                    dialog.showModal();
+                });
+            });
+
+            dialog.querySelector('[data-preview-close]')?.addEventListener('click', () => dialog.close());
+            dialog.addEventListener('click', event => {
+                if (event.target === dialog) dialog.close();
+            });
+            dialog.addEventListener('close', () => frame.removeAttribute('src'));
+        })();
+    </script>
+}

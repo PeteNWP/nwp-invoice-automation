@@ -26,13 +26,15 @@ public sealed class ResolveModel : PageModel
     public CapturedDocument? Document { get; private set; }
     public IReadOnlyList<NwpSupplier> Suppliers { get; private set; } = [];
     public bool Saved { get; private set; }
+    public bool Reviewed { get; private set; }
 
     [BindProperty] public InputModel Input { get; set; } = new();
 
-    public async Task<IActionResult> OnGetAsync(Guid id, bool saved = false, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> OnGetAsync(Guid id, bool saved = false, bool reviewed = false, CancellationToken cancellationToken = default)
     {
         await LoadAsync(id, cancellationToken);
         Saved = saved;
+        Reviewed = reviewed;
         if (Document is null) return Page();
         Input = InputModel.FromDocument(Document, Suppliers);
         return Page();
@@ -50,6 +52,7 @@ public sealed class ResolveModel : PageModel
             ModelState.AddModelError("Input.NwpSupplierOid", "Select a supplier from the live NWP supplier master.");
         if (!ModelState.IsValid) return Page();
 
+        var approve = string.Equals(action, "approve", StringComparison.OrdinalIgnoreCase);
         if (Document.Extraction is { } extraction)
         {
             try
@@ -61,7 +64,7 @@ public sealed class ResolveModel : PageModel
                     InvoiceDate = Input.InvoiceDate, Reference = Input.BatchOrReference,
                     Total = Input.Total, Currency = Input.Currency,
                     ReviewedBy = _userAccess.GetEmail(User) ?? "Demo user", ReviewNote = Input.ResolutionNote,
-                    Approve = string.Equals(action, "approve", StringComparison.OrdinalIgnoreCase),
+                    Approve = approve,
                     Lines = Input.Lines.Select((line, index) => new InvoiceExtractionLineRequest
                     {
                         LineNumber = index + 1, Sku = line.Sku, Description = line.Description,
@@ -89,7 +92,7 @@ public sealed class ResolveModel : PageModel
             InvoiceNumber = Input.InvoiceNumber?.Trim(), InvoiceDate = Input.InvoiceDate,
             BatchOrReference = Input.BatchOrReference?.Trim(), Total = Input.Total,
             Currency = string.IsNullOrWhiteSpace(Input.Currency) ? "GBP" : Input.Currency.Trim().ToUpperInvariant(),
-            AssignedQueue = Input.AssignedQueue, WorkflowOwner = Input.WorkflowOwner?.Trim(),
+            AssignedQueue = Input.AssignedQueue, MarkReviewed = approve, WorkflowOwner = Input.WorkflowOwner?.Trim(),
             TaughtSupplierAlias = Input.TeachSupplierAlias, TaughtNestedEmailRule = Input.TeachNestedEmailRule,
             TaughtMailboxRoute = Input.TeachMailboxRoute, TaughtExtractionPattern = Input.TeachExtractionPattern,
             ObservedSupplierName = Input.ObservedSupplierName?.Trim(), ObservedSender = sender,
@@ -99,7 +102,7 @@ public sealed class ResolveModel : PageModel
 
         _profiles.TeachFromResolution(resolution, Document);
         await _docs.ResolveExceptionAsync(id, resolution, cancellationToken);
-        return RedirectToPage("/Exceptions/Resolve", new { id, saved = true });
+        return RedirectToPage("/Exceptions/Resolve", new { id, saved = true, reviewed = approve });
     }
 
     private async Task LoadAsync(Guid id, CancellationToken cancellationToken)

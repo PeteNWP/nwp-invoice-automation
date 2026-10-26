@@ -29,7 +29,10 @@ else
     @if (Model.Saved)
     {
         <div class="alert alert-success">
-            <strong>Saved.</strong> The document has been classified and moved to the selected queue. The approved supplier identity and checked teaching rules have been saved.
+            <strong>@(Model.Reviewed ? "Reviewed." : "Saved.")</strong>
+            @(Model.Reviewed
+                ? "The document has been approved and moved to Reviewed. The approved supplier identity and checked teaching rules have been saved."
+                : "The corrections and supplier identity have been saved, but the document remains in Invoice Queue until it is approved.")
         </div>
     }
 
