@@ -9,6 +9,7 @@ public interface IInvoiceExtractionRepository
     Task<InvoiceExtractionResult> UpsertAsync(InvoiceExtractionRequest request, CancellationToken cancellationToken);
     Task<IReadOnlyDictionary<(string DriveId, string DriveItemId), InvoiceExtraction>> GetBatchAsync(
         IEnumerable<(string DriveId, string DriveItemId)> keys, CancellationToken cancellationToken);
+    Task SaveReviewAsync(InvoiceExtractionReview review, CancellationToken cancellationToken);
 }
 
 public sealed class InvoiceExtractionRepository : IInvoiceExtractionRepository
@@ -41,7 +42,7 @@ public sealed class InvoiceExtractionRepository : IInvoiceExtractionRepository
                         (@DriveId, @DriveItemId, @SiteId, @SupplierName, @InvoiceNumber, @InvoiceDate, @Reference, @Currency, @Total, @Confidence, @Model, @ExtractedAt);
                     SET @Id = SCOPE_IDENTITY(); SET @Created = 1;
                 END
-                ELSE
+                ELSE IF NOT EXISTS (SELECT 1 FROM dbo.InvoiceExtraction WHERE Id=@Id AND ReviewStatus=2)
                     UPDATE dbo.InvoiceExtraction SET SiteId=@SiteId, SupplierName=@SupplierName, InvoiceNumber=@InvoiceNumber,
                         InvoiceDate=@InvoiceDate, Reference=@Reference, Currency=@Currency, Total=@Total, Confidence=@Confidence,
                         Model=@Model, ExtractedAt=@ExtractedAt, UpdatedAt=SYSUTCDATETIME() WHERE Id=@Id;
@@ -68,12 +69,13 @@ public sealed class InvoiceExtractionRepository : IInvoiceExtractionRepository
                 id = reader.GetInt64(0); created = reader.GetBoolean(1);
             }
 
-            await using (var delete = new SqlCommand("DELETE dbo.InvoiceExtractionLine WHERE InvoiceExtractionId=@Id", connection, transaction))
+            // Approved human corrections are immutable to worker retries/reprocessing.
+            await using (var delete = new SqlCommand("DELETE dbo.InvoiceExtractionLine WHERE InvoiceExtractionId=@Id AND NOT EXISTS (SELECT 1 FROM dbo.InvoiceExtraction WHERE Id=@Id AND ReviewStatus=2)", connection, transaction))
             {
                 delete.Parameters.Add("@Id", SqlDbType.BigInt).Value = id;
                 await delete.ExecuteNonQueryAsync(cancellationToken);
             }
-            const string lineSql = "INSERT dbo.InvoiceExtractionLine (InvoiceExtractionId,LineNumber,Sku,Description,Quantity,UnitPrice,LineTotal) VALUES (@Id,@LineNumber,@Sku,@Description,@Quantity,@UnitPrice,@LineTotal)";
+            const string lineSql = "INSERT dbo.InvoiceExtractionLine (InvoiceExtractionId,LineNumber,Sku,Description,Quantity,UnitPrice,LineTotal) SELECT @Id,@LineNumber,@Sku,@Description,@Quantity,@UnitPrice,@LineTotal WHERE NOT EXISTS (SELECT 1 FROM dbo.InvoiceExtraction WHERE Id=@Id AND ReviewStatus=2)";
             foreach (var line in request.Lines)
             {
                 await using var insert = new SqlCommand(lineSql, connection, transaction);
@@ -108,6 +110,7 @@ public sealed class InvoiceExtractionRepository : IInvoiceExtractionRepository
         }
         command.CommandText = $"""
             SELECT e.Id,e.DriveId,e.DriveItemId,e.SiteId,e.SupplierName,e.InvoiceNumber,e.InvoiceDate,e.Reference,e.Currency,e.Total,e.Confidence,e.Model,e.ExtractedAt,
+                   e.ReviewStatus,e.ReviewedAt,e.ReviewedBy,e.ReviewNote,e.ReviewRevision,
                    l.LineNumber,l.Sku,l.Description,l.Quantity,l.UnitPrice,l.LineTotal
             FROM dbo.InvoiceExtraction e LEFT JOIN dbo.InvoiceExtractionLine l ON l.InvoiceExtractionId=e.Id
             WHERE {string.Join(" OR ", predicates)} ORDER BY e.Id,l.LineNumber
@@ -119,12 +122,47 @@ public sealed class InvoiceExtractionRepository : IInvoiceExtractionRepository
             var id = reader.GetInt64(0);
             if (!builders.TryGetValue(id, out var entry))
             {
-                entry = (new InvoiceExtraction { Id=id, DriveId=reader.GetString(1), DriveItemId=reader.GetString(2), SiteId=NullableString(reader,3), SupplierName=NullableString(reader,4), InvoiceNumber=NullableString(reader,5), InvoiceDate=reader.IsDBNull(6)?null:DateOnly.FromDateTime(reader.GetDateTime(6)), Reference=NullableString(reader,7), Currency=NullableString(reader,8), Total=NullableDecimal(reader,9), Confidence=NullableDecimal(reader,10), Model=NullableString(reader,11), ExtractedAt=reader.GetDateTimeOffset(12) }, []);
+                entry = (new InvoiceExtraction { Id=id, DriveId=reader.GetString(1), DriveItemId=reader.GetString(2), SiteId=NullableString(reader,3), SupplierName=NullableString(reader,4), InvoiceNumber=NullableString(reader,5), InvoiceDate=reader.IsDBNull(6)?null:DateOnly.FromDateTime(reader.GetDateTime(6)), Reference=NullableString(reader,7), Currency=NullableString(reader,8), Total=NullableDecimal(reader,9), Confidence=NullableDecimal(reader,10), Model=NullableString(reader,11), ExtractedAt=reader.GetDateTimeOffset(12), ReviewStatus=(ExtractionReviewStatus)reader.GetByte(13), ReviewedAt=reader.IsDBNull(14)?null:reader.GetDateTimeOffset(14), ReviewedBy=NullableString(reader,15), ReviewNote=NullableString(reader,16), ReviewRevision=reader.GetInt64(17) }, []);
                 builders[id] = entry;
             }
-            if (!reader.IsDBNull(13)) entry.Lines.Add(new InvoiceExtractionLine { LineNumber=reader.GetInt32(13), Sku=NullableString(reader,14), Description=reader.GetString(15), Quantity=NullableDecimal(reader,16), UnitPrice=NullableDecimal(reader,17), LineTotal=NullableDecimal(reader,18) });
+            if (!reader.IsDBNull(18)) entry.Lines.Add(new InvoiceExtractionLine { LineNumber=reader.GetInt32(18), Sku=NullableString(reader,19), Description=reader.GetString(20), Quantity=NullableDecimal(reader,21), UnitPrice=NullableDecimal(reader,22), LineTotal=NullableDecimal(reader,23) });
         }
-        return builders.Values.Select(x => new InvoiceExtraction { Id=x.Header.Id, DriveId=x.Header.DriveId, DriveItemId=x.Header.DriveItemId, SiteId=x.Header.SiteId, SupplierName=x.Header.SupplierName, InvoiceNumber=x.Header.InvoiceNumber, InvoiceDate=x.Header.InvoiceDate, Reference=x.Header.Reference, Currency=x.Header.Currency, Total=x.Header.Total, Confidence=x.Header.Confidence, Model=x.Header.Model, ExtractedAt=x.Header.ExtractedAt, Lines=x.Lines }).ToDictionary(x => (x.DriveId, x.DriveItemId));
+        return builders.Values.Select(x => new InvoiceExtraction { Id=x.Header.Id, DriveId=x.Header.DriveId, DriveItemId=x.Header.DriveItemId, SiteId=x.Header.SiteId, SupplierName=x.Header.SupplierName, InvoiceNumber=x.Header.InvoiceNumber, InvoiceDate=x.Header.InvoiceDate, Reference=x.Header.Reference, Currency=x.Header.Currency, Total=x.Header.Total, Confidence=x.Header.Confidence, Model=x.Header.Model, ExtractedAt=x.Header.ExtractedAt, ReviewStatus=x.Header.ReviewStatus, ReviewedAt=x.Header.ReviewedAt, ReviewedBy=x.Header.ReviewedBy, ReviewNote=x.Header.ReviewNote, ReviewRevision=x.Header.ReviewRevision, Lines=x.Lines }).ToDictionary(x => (x.DriveId, x.DriveItemId));
+    }
+
+    public async Task SaveReviewAsync(InvoiceExtractionReview review, CancellationToken cancellationToken)
+    {
+        await using var connection = CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+        const string sql = """
+            UPDATE dbo.InvoiceExtraction SET SupplierName=@SupplierName, InvoiceNumber=@InvoiceNumber,
+                InvoiceDate=@InvoiceDate, Reference=@Reference, Currency=@Currency, Total=@Total,
+                ReviewStatus=@ReviewStatus, ReviewedAt=SYSUTCDATETIME(), ReviewedBy=@ReviewedBy,
+                ReviewNote=@ReviewNote, ReviewRevision=ReviewRevision+1, UpdatedAt=SYSUTCDATETIME()
+            WHERE Id=@Id AND ReviewRevision=@ExpectedRevision;
+            """;
+        await using var command = new SqlCommand(sql, connection, transaction);
+        command.Parameters.Add("@Id", SqlDbType.BigInt).Value=review.Id;
+        command.Parameters.Add("@ExpectedRevision", SqlDbType.BigInt).Value=review.ExpectedRevision;
+        Add(command,"@SupplierName",SqlDbType.NVarChar,300,Clean(review.SupplierName));
+        Add(command,"@InvoiceNumber",SqlDbType.NVarChar,100,Clean(review.InvoiceNumber));
+        Add(command,"@InvoiceDate",SqlDbType.Date,null,review.InvoiceDate?.ToDateTime(TimeOnly.MinValue));
+        Add(command,"@Reference",SqlDbType.NVarChar,100,Clean(review.Reference));
+        Add(command,"@Currency",SqlDbType.Char,3,Clean(review.Currency)?.ToUpperInvariant());
+        AddDecimal(command,"@Total",review.Total,18,4);
+        command.Parameters.Add("@ReviewStatus",SqlDbType.TinyInt).Value=(byte)(review.Approve?ExtractionReviewStatus.Approved:ExtractionReviewStatus.Corrected);
+        Add(command,"@ReviewedBy",SqlDbType.NVarChar,320,Clean(review.ReviewedBy));
+        Add(command,"@ReviewNote",SqlDbType.NVarChar,1000,Clean(review.ReviewNote));
+        if (await command.ExecuteNonQueryAsync(cancellationToken) != 1) { await transaction.RollbackAsync(CancellationToken.None); throw new InvoiceExtractionConcurrencyException(); }
+        await using (var delete = new SqlCommand("DELETE dbo.InvoiceExtractionLine WHERE InvoiceExtractionId=@Id",connection,transaction)) { delete.Parameters.Add("@Id",SqlDbType.BigInt).Value=review.Id; await delete.ExecuteNonQueryAsync(cancellationToken); }
+        const string lineSql="INSERT dbo.InvoiceExtractionLine (InvoiceExtractionId,LineNumber,Sku,Description,Quantity,UnitPrice,LineTotal) VALUES (@Id,@LineNumber,@Sku,@Description,@Quantity,@UnitPrice,@LineTotal)";
+        foreach(var line in review.Lines)
+        {
+            await using var insert=new SqlCommand(lineSql,connection,transaction); insert.Parameters.Add("@Id",SqlDbType.BigInt).Value=review.Id; insert.Parameters.Add("@LineNumber",SqlDbType.Int).Value=line.LineNumber;
+            Add(insert,"@Sku",SqlDbType.NVarChar,100,Clean(line.Sku)); Add(insert,"@Description",SqlDbType.NVarChar,1000,line.Description.Trim()); AddDecimal(insert,"@Quantity",line.Quantity,18,4); AddDecimal(insert,"@UnitPrice",line.UnitPrice,18,4); AddDecimal(insert,"@LineTotal",line.LineTotal,18,4); await insert.ExecuteNonQueryAsync(cancellationToken);
+        }
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

@@ -11,13 +11,15 @@ public sealed class ResolveModel : PageModel
     private readonly IDocumentStore _docs;
     private readonly SupplierProfileStore _profiles;
     private readonly INwpSupplierDirectory _supplierDirectory;
+    private readonly IInvoiceExtractionRepository _extractions;
     private readonly UserAccessService _userAccess;
 
-    public ResolveModel(IDocumentStore docs, SupplierProfileStore profiles, INwpSupplierDirectory supplierDirectory, UserAccessService userAccess)
+    public ResolveModel(IDocumentStore docs, SupplierProfileStore profiles, INwpSupplierDirectory supplierDirectory, IInvoiceExtractionRepository extractions, UserAccessService userAccess)
     {
         _docs = docs;
         _profiles = profiles;
         _supplierDirectory = supplierDirectory;
+        _extractions = extractions;
         _userAccess = userAccess;
     }
 
@@ -36,7 +38,7 @@ public sealed class ResolveModel : PageModel
         return Page();
     }
 
-    public async Task<IActionResult> OnPostAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> OnPostAsync(Guid id, string action, CancellationToken cancellationToken)
     {
         await LoadAsync(id, cancellationToken);
         if (Document is null) return Page();
@@ -47,6 +49,32 @@ public sealed class ResolveModel : PageModel
         if (supplier is null)
             ModelState.AddModelError("Input.NwpSupplierOid", "Select a supplier from the live NWP supplier master.");
         if (!ModelState.IsValid) return Page();
+
+        if (Document.Extraction is { } extraction)
+        {
+            try
+            {
+                await _extractions.SaveReviewAsync(new InvoiceExtractionReview
+                {
+                    Id = extraction.Id, ExpectedRevision = Input.ExtractionRevision,
+                    SupplierName = Input.ObservedSupplierName, InvoiceNumber = Input.InvoiceNumber,
+                    InvoiceDate = Input.InvoiceDate, Reference = Input.BatchOrReference,
+                    Total = Input.Total, Currency = Input.Currency,
+                    ReviewedBy = _userAccess.GetEmail(User) ?? "Demo user", ReviewNote = Input.ResolutionNote,
+                    Approve = string.Equals(action, "approve", StringComparison.OrdinalIgnoreCase),
+                    Lines = Input.Lines.Select((line, index) => new InvoiceExtractionLineRequest
+                    {
+                        LineNumber = index + 1, Sku = line.Sku, Description = line.Description,
+                        Quantity = line.Quantity, UnitPrice = line.UnitPrice, LineTotal = line.LineTotal
+                    }).ToList()
+                }, cancellationToken);
+            }
+            catch (InvoiceExtractionConcurrencyException ex)
+            {
+                ModelState.AddModelError(string.Empty, ex.Message);
+                return Page();
+            }
+        }
 
         var sender = Document.FromAddress?.Trim();
         var at = sender?.LastIndexOf('@') ?? -1;
@@ -64,7 +92,7 @@ public sealed class ResolveModel : PageModel
             AssignedQueue = Input.AssignedQueue, WorkflowOwner = Input.WorkflowOwner?.Trim(),
             TaughtSupplierAlias = Input.TeachSupplierAlias, TaughtNestedEmailRule = Input.TeachNestedEmailRule,
             TaughtMailboxRoute = Input.TeachMailboxRoute, TaughtExtractionPattern = Input.TeachExtractionPattern,
-            ObservedSupplierName = Document.DetectedSupplier?.Trim(), ObservedSender = sender,
+            ObservedSupplierName = Input.ObservedSupplierName?.Trim(), ObservedSender = sender,
             ObservedSenderDomain = at >= 0 && at < sender!.Length - 1 ? sender[(at + 1)..].ToLowerInvariant() : null,
             ResolutionNote = Input.ResolutionNote?.Trim()
         };
@@ -84,6 +112,9 @@ public sealed class ResolveModel : PageModel
     {
         [Required, Display(Name = "Supplier master")] public string NwpSupplierOid { get; set; } = "";
         public string SupplierSearchLabel { get; set; } = "";
+        public long ExtractionRevision { get; set; }
+        [Display(Name = "Observed supplier name")] public string? ObservedSupplierName { get; set; }
+        public List<LineInput> Lines { get; set; } = [];
         [Display(Name = "Document type")] public DocumentType DocumentType { get; set; } = DocumentType.Invoice;
         [Display(Name = "Invoice number")] public string? InvoiceNumber { get; set; }
         [Display(Name = "Invoice date")] public DateOnly? InvoiceDate { get; set; }
@@ -102,11 +133,15 @@ public sealed class ResolveModel : PageModel
         {
             var selected = string.IsNullOrWhiteSpace(document.NwpSupplierOid) ? null
                 : suppliers.FirstOrDefault(s => string.Equals(s.Oid, document.NwpSupplierOid, StringComparison.Ordinal));
+            var extraction = document.Extraction;
             return new InputModel
             {
                 NwpSupplierOid = selected?.Oid ?? "", SupplierSearchLabel = selected?.DisplayLabel ?? "",
-                DocumentType = document.DocumentType, InvoiceNumber = document.InvoiceNumber, InvoiceDate = document.InvoiceDate,
-                BatchOrReference = document.BatchOrReference, Total = document.Total, Currency = document.Currency ?? "GBP",
+                ExtractionRevision = extraction?.ReviewRevision ?? 0,
+                ObservedSupplierName = extraction?.SupplierName ?? document.DetectedSupplier,
+                Lines = extraction?.Lines.Select(l => new LineInput { Sku=l.Sku, Description=l.Description, Quantity=l.Quantity, UnitPrice=l.UnitPrice, LineTotal=l.LineTotal }).ToList() ?? [],
+                DocumentType = document.DocumentType, InvoiceNumber = extraction?.InvoiceNumber ?? document.InvoiceNumber, InvoiceDate = extraction?.InvoiceDate ?? document.InvoiceDate,
+                BatchOrReference = extraction?.Reference ?? document.BatchOrReference, Total = extraction?.Total ?? document.Total, Currency = extraction?.Currency ?? document.Currency ?? "GBP",
                 AssignedQueue = document.DocumentType == DocumentType.Statement ? "Statements" : "Invoice Queue",
                 WorkflowOwner = document.WorkflowOwner,
                 TeachSupplierAlias = false,
@@ -115,5 +150,14 @@ public sealed class ResolveModel : PageModel
                 ResolutionNote = document.ReviewerNote
             };
         }
+    }
+
+    public sealed class LineInput
+    {
+        [StringLength(100)] public string? Sku { get; set; }
+        [Required, StringLength(1000)] public string Description { get; set; } = "";
+        public decimal? Quantity { get; set; }
+        public decimal? UnitPrice { get; set; }
+        public decimal? LineTotal { get; set; }
     }
 }

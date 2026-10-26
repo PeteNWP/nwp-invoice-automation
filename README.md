@@ -139,3 +139,8 @@ migrations. Configure `ConnectionStrings:NwpMaster` with read-only access to
 `NWPDev.dbo.Supplier`. Review pages cache that live directory for 15 minutes and persist the
 selected supplier OID/reference/name; approved aliases are stored locally in
 `dbo.SupplierIdentityMapping` without a cross-database foreign key.
+
+Apply `sql/005_extraction_review.sql` after migration 004. It adds review status, reviewer,
+timestamp, note and optimistic revision fields to `dbo.InvoiceExtraction`. Approved rows
+are protected from extraction-worker reprocessing; the observed supplier text remains on
+the extraction while the authoritative NWP supplier identity remains on `CapturedDocument`.

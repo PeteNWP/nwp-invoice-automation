@@ -100,6 +100,11 @@ else
                             {
                                 <a asp-page="/Exceptions/Resolve" asp-route-id="@d.Id">Resolve</a>
                             }
+                            else if (d.DocumentType == DocumentType.Invoice && d.Extraction is not null)
+                            {
+                                <a asp-page="/Exceptions/Resolve" asp-route-id="@d.Id">Review</a>
+                                <div class="muted">@d.Extraction.ReviewStatus</div>
+                            }
                             else
                             {
                                 <a asp-page="/Documents/Detail" asp-route-id="@d.Id">Open</a>

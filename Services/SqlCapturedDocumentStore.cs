@@ -12,17 +12,20 @@ public sealed class SqlCapturedDocumentStore : IDocumentStore
     private readonly ICapturedDocumentRepository _repository;
     private readonly MockDocumentStore _fallback;
     private readonly IConfiguration _configuration;
+    private readonly IInvoiceExtractionRepository _extractions;
     private readonly ILogger<SqlCapturedDocumentStore> _logger;
 
     public SqlCapturedDocumentStore(
         ICapturedDocumentRepository repository,
         MockDocumentStore fallback,
         IConfiguration configuration,
+        IInvoiceExtractionRepository extractions,
         ILogger<SqlCapturedDocumentStore> logger)
     {
         _repository = repository;
         _fallback = fallback;
         _configuration = configuration;
+        _extractions = extractions;
         _logger = logger;
     }
 
@@ -39,6 +42,7 @@ public sealed class SqlCapturedDocumentStore : IDocumentStore
         try
         {
             var documents = await _repository.GetAllAsync(cancellationToken);
+            await AttachExtractionsAsync(documents, cancellationToken);
             Source = $"SharePoint: {_configuration["SharePointInbox:LibraryName"] ?? "Invoice Automation"}/{_configuration["SharePointInbox:FolderPath"]?.Trim('/') ?? "Incoming"} (synced to SQL)";
             return documents;
         }
@@ -67,7 +71,9 @@ public sealed class SqlCapturedDocumentStore : IDocumentStore
             return await _fallback.GetAsync(id, cancellationToken);
         }
 
-        return await _repository.GetAsync(id, cancellationToken);
+        var document = await _repository.GetAsync(id, cancellationToken);
+        if (document is not null) await AttachExtractionsAsync([document], cancellationToken);
+        return document;
     }
 
     public async Task<IReadOnlyList<CapturedDocument>> ByTypeAsync(DocumentType type, CancellationToken cancellationToken = default) =>
@@ -85,6 +91,31 @@ public sealed class SqlCapturedDocumentStore : IDocumentStore
         }
 
         await _repository.ResolveExceptionAsync(id, resolution, cancellationToken);
+    }
+
+    private async Task AttachExtractionsAsync(IReadOnlyList<CapturedDocument> documents, CancellationToken cancellationToken)
+    {
+        var keys = documents.Where(d => d.GraphDriveId is not null && d.GraphItemId is not null)
+            .Select(d => (d.GraphDriveId!, d.GraphItemId!));
+        var extractions = await _extractions.GetBatchAsync(keys, cancellationToken);
+        foreach (var document in documents)
+        {
+            if (document.GraphDriveId is null || document.GraphItemId is null ||
+                !extractions.TryGetValue((document.GraphDriveId, document.GraphItemId), out var extraction)) continue;
+            document.Extraction = extraction;
+            // Observed extraction identity is deliberately not promoted to the authoritative master fields.
+            document.DetectedSupplier = extraction.SupplierName;
+            document.InvoiceNumber = extraction.InvoiceNumber;
+            document.InvoiceDate = extraction.InvoiceDate;
+            document.BatchOrReference = extraction.Reference;
+            document.Total = extraction.Total;
+            document.Currency = extraction.Currency;
+            if (document.Status == ClassificationStatus.Unclassified)
+            {
+                document.DocumentType = DocumentType.Invoice;
+                document.Status = ClassificationStatus.Classified;
+            }
+        }
     }
 
     private bool UseMockSource() =>

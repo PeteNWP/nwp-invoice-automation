@@ -29,6 +29,34 @@ public sealed class InvoiceExtractionLineRequest
     [Range(typeof(decimal), "-999999999999.9999", "999999999999.9999")] public decimal? LineTotal { get; init; }
 }
 
+public enum ExtractionReviewStatus : byte
+{
+    Pending = 0,
+    Corrected = 1,
+    Approved = 2
+}
+
+public sealed class InvoiceExtractionReview
+{
+    public long Id { get; init; }
+    public long ExpectedRevision { get; init; }
+    public string? SupplierName { get; init; }
+    public string? InvoiceNumber { get; init; }
+    public DateOnly? InvoiceDate { get; init; }
+    public string? Reference { get; init; }
+    public string? Currency { get; init; }
+    public decimal? Total { get; init; }
+    public string ReviewedBy { get; init; } = "";
+    public string? ReviewNote { get; init; }
+    public bool Approve { get; init; }
+    public IReadOnlyList<InvoiceExtractionLineRequest> Lines { get; init; } = [];
+}
+
+public sealed class InvoiceExtractionConcurrencyException : Exception
+{
+    public InvoiceExtractionConcurrencyException() : base("This extraction was changed by another reviewer. Reload it before saving.") { }
+}
+
 public sealed class InvoiceExtraction
 {
     public long Id { get; init; }
@@ -44,6 +72,11 @@ public sealed class InvoiceExtraction
     public decimal? Confidence { get; init; }
     public string? Model { get; init; }
     public DateTimeOffset ExtractedAt { get; init; }
+    public ExtractionReviewStatus ReviewStatus { get; init; }
+    public DateTimeOffset? ReviewedAt { get; init; }
+    public string? ReviewedBy { get; init; }
+    public string? ReviewNote { get; init; }
+    public long ReviewRevision { get; init; }
     public IReadOnlyList<InvoiceExtractionLine> Lines { get; init; } = [];
 }
 

@@ -215,6 +215,9 @@ public sealed class GraphInboxReaderDeltaTests
             IEnumerable<(string DriveId, string DriveItemId)> keys, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyDictionary<(string DriveId, string DriveItemId), InvoiceExtraction>>(
                 new Dictionary<(string DriveId, string DriveItemId), InvoiceExtraction>());
+
+        public Task SaveReviewAsync(InvoiceExtractionReview review, CancellationToken cancellationToken) =>
+            throw new NotSupportedException("Not exercised by delta-sync tests.");
     }
 
     /// <summary>
