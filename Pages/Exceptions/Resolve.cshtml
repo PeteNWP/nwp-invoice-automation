@@ -104,7 +104,7 @@ else
                         <div id="supplier-master-results" class="supplier-master-results" role="listbox" hidden>
                             @foreach (var supplier in Model.Suppliers)
                             {
-                                <button type="button" role="option" data-value="@supplier.DisplayLabel" data-oid="@supplier.Oid">@supplier.DisplayLabel</button>
+                                <div class="supplier-master-option" role="option" tabindex="0" data-value="@supplier.DisplayLabel" data-oid="@supplier.Oid">@supplier.DisplayLabel</div>
                             }
                         </div>
                     </div>
@@ -224,7 +224,7 @@ else
             const search = document.getElementById('Input_SupplierSearchLabel');
             const oid = document.getElementById('Input_NwpSupplierOid');
             const results = document.getElementById('supplier-master-results');
-            const options = [...results.querySelectorAll('button')];
+            const options = [...results.querySelectorAll('.supplier-master-option')];
 
             const filter = () => {
                 const query = search.value.trim().toLowerCase();
@@ -240,12 +240,21 @@ else
 
             search?.addEventListener('input', filter);
             search?.addEventListener('focus', filter);
-            results?.addEventListener('click', event => {
-                const option = event.target.closest('button[data-oid]');
-                if (!option) return;
+            const selectOption = option => {
                 search.value = option.dataset.value;
                 oid.value = option.dataset.oid;
                 results.hidden = true;
+            };
+            results?.addEventListener('click', event => {
+                const option = event.target.closest('.supplier-master-option[data-oid]');
+                if (option) selectOption(option);
+            });
+            results?.addEventListener('keydown', event => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                const option = event.target.closest('.supplier-master-option[data-oid]');
+                if (!option) return;
+                event.preventDefault();
+                selectOption(option);
             });
             document.addEventListener('click', event => {
                 if (!event.target.closest('.supplier-master-picker')) results.hidden = true;
