@@ -19,8 +19,8 @@ IF COL_LENGTH(N'dbo.InvoiceExtraction', N'ReviewRevision') IS NULL
         CONSTRAINT DF_InvoiceExtraction_ReviewRevision DEFAULT (0);
 
 IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name=N'CK_InvoiceExtraction_ReviewStatus')
-    ALTER TABLE dbo.InvoiceExtraction ADD CONSTRAINT CK_InvoiceExtraction_ReviewStatus
-        CHECK (ReviewStatus IN (0, 1, 2));
+    EXEC(N'ALTER TABLE dbo.InvoiceExtraction ADD CONSTRAINT CK_InvoiceExtraction_ReviewStatus
+        CHECK (ReviewStatus IN (0, 1, 2));');
 
 COMMIT TRANSACTION;
 GO
