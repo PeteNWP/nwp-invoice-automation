@@ -278,7 +278,11 @@ public sealed class GraphInboxReader
                 document.Currency = extraction.Currency;
                 document.Total = extraction.Total;
                 document.DocumentType = DocumentType.Invoice;
-                document.Status = ClassificationStatus.Classified;
+                document.Status = document.Subject.Contains("statement", StringComparison.OrdinalIgnoreCase)
+                    ? ClassificationStatus.Exception
+                    : ClassificationStatus.ReviewRequired;
+                if (document.Status == ClassificationStatus.Exception)
+                    document.ExceptionReason = "The subject identifies this as a statement, but extraction returned invoice fields. Review the original document before approving.";
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }

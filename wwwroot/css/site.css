@@ -284,6 +284,7 @@ button { background: #1464a5; border: 0; color: white; border-radius: 6px; paddi
 .flag-exception { background: #fde8e8; color: #b42318; }
 .flag-ignored { background: #f3f4f6; color: #6b7280; }
 .flag-classified { background: #e7f6ec; color: #137333; }
+.flag-review { background: #e8f1f8; color: #12395b; }
 .flag-late { background: #fff7da; color: #7a5300; margin-left: .35rem; }
 
 .doc-table td .muted { font-size: .82rem; }

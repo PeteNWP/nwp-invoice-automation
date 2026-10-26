@@ -13,6 +13,7 @@ public sealed class IndexModel : PageModel
     public IReadOnlyList<CapturedDocument> Documents { get; private set; } = Array.Empty<CapturedDocument>();
 
     public async Task OnGetAsync(CancellationToken cancellationToken) => Documents = (await _docs.AllAsync(cancellationToken))
-        .Where(d => d.DocumentType == DocumentType.Invoice && d.Status == ClassificationStatus.Classified)
+        .Where(d => d.DocumentType == DocumentType.Invoice
+            && d.Status is ClassificationStatus.ReviewRequired or ClassificationStatus.Classified)
         .ToList();
 }

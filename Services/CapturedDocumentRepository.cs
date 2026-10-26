@@ -377,6 +377,9 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
         var resolvedStatus = NullableInt(r, "ResolvedStatus");
         var resolvedDocumentType = NullableInt(r, "ResolvedDocumentType");
         var receivedAtOrdinal = r.GetOrdinal("ReceivedAt");
+        var subject = r.GetString(r.GetOrdinal("Subject"));
+        var statementMismatch = hasExtraction && !resolvedStatus.HasValue
+            && subject.Contains("statement", StringComparison.OrdinalIgnoreCase);
 
         return new CapturedDocument
         {
@@ -384,7 +387,7 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
             GraphSiteId = NullableString(r, "SiteId"),
             GraphDriveId = NullableString(r, "DriveId"),
             GraphItemId = NullableString(r, "GraphItemId"),
-            Subject = r.GetString(r.GetOrdinal("Subject")),
+            Subject = subject,
             FromName = NullableString(r, "FromName"),
             FromAddress = NullableString(r, "FromAddress") ?? "",
             OriginalMailbox = r.GetString(r.GetOrdinal("OriginalMailbox")),
@@ -409,8 +412,10 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
                 : hasExtraction ? DocumentType.Invoice : DocumentType.Unknown,
             Status = resolvedStatus.HasValue
                 ? (ClassificationStatus)resolvedStatus.Value
-                : hasExtraction ? ClassificationStatus.Classified : ClassificationStatus.Unclassified,
-            ExceptionReason = NullableString(r, "ExceptionReason"),
+                : statementMismatch ? ClassificationStatus.Exception
+                : hasExtraction ? ClassificationStatus.ReviewRequired : ClassificationStatus.Unclassified,
+            ExceptionReason = NullableString(r, "ExceptionReason")
+                ?? (statementMismatch ? "The subject identifies this as a statement, but extraction returned invoice fields. Review the original document before approving." : null),
             SupplierMasterName = NullableString(r, "SupplierMasterName"),
             NwpSupplierOid = NullableString(r, "NwpSupplierOID"),
             NwpSupplierReference = NullableString(r, "NwpSupplierReference"),

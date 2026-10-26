@@ -21,8 +21,8 @@ else
             <p class="muted">Check the classification and captured fields, correct them where needed, then choose what the system should remember.</p>
         </div>
         <div class="approval-summary">
-            <strong>@(d.Status == ClassificationStatus.Exception ? "!" : "✓")</strong>
-            <span>@d.Status</span>
+            <strong>@(d.Status == ClassificationStatus.Exception ? "!" : d.Status == ClassificationStatus.Classified ? "✓" : "?")</strong>
+            <span>@(d.Status == ClassificationStatus.ReviewRequired ? "Review needed" : d.Status.ToString())</span>
         </div>
     </div>
 

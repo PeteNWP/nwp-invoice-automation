@@ -24,5 +24,7 @@ public enum ClassificationStatus
     /// <summary>Held in the exceptions queue for a specific reason.</summary>
     Exception = 2,
     /// <summary>Deliberately not printed/captured (e.g. acknowledgements, ENS docs).</summary>
-    Ignored = 3
+    Ignored = 3,
+    /// <summary>AI/rules produced an extraction, but a person has not approved it yet.</summary>
+    ReviewRequired = 4
 }

@@ -113,7 +113,13 @@ public sealed class SqlCapturedDocumentStore : IDocumentStore
             if (document.Status == ClassificationStatus.Unclassified)
             {
                 document.DocumentType = DocumentType.Invoice;
-                document.Status = ClassificationStatus.Classified;
+                document.Status = ClassificationStatus.ReviewRequired;
+            }
+            if (document.Status == ClassificationStatus.ReviewRequired
+                && document.Subject.Contains("statement", StringComparison.OrdinalIgnoreCase))
+            {
+                document.Status = ClassificationStatus.Exception;
+                document.ExceptionReason = "The subject identifies this as a statement, but extraction returned invoice fields. Review the original document before approving.";
             }
         }
     }
