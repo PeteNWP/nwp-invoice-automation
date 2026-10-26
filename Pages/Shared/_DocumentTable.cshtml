@@ -90,11 +90,9 @@ else
                             }
                         </td>
                         <td>
-                            <span class="status-flag @status.css">@status.label</span>
-                            @if (!string.IsNullOrEmpty(d.ExceptionReason))
-                            {
-                                <div class="muted">@d.ExceptionReason</div>
-                            }
+                            <span class="status-flag @status.css"
+                                  title="@d.ExceptionReason"
+                                  aria-label="@(!string.IsNullOrWhiteSpace(d.ExceptionReason) ? $"{status.label}: {d.ExceptionReason}" : status.label)">@status.label</span>
                         </td>
                         <td>
                             <div class="document-row-actions">
