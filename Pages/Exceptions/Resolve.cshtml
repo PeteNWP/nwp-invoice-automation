@@ -96,16 +96,18 @@ else
                 <div asp-validation-summary="All" class="alert alert-error"></div>
                 <input asp-for="Input.ExtractionRevision" type="hidden" />
 
-                <label>
-                    <span>Supplier master</span>
-                    <input asp-for="Input.SupplierSearchLabel" list="supplier-master-list" autocomplete="off" placeholder="Search by reference or name" />
-                    <input asp-for="Input.NwpSupplierOid" type="hidden" />
-                    <datalist id="supplier-master-list">
-                        @foreach (var supplier in Model.Suppliers)
-                        {
-                            <option value="@supplier.DisplayLabel" data-oid="@supplier.Oid"></option>
-                        }
-                    </datalist>
+                <div class="supplier-master-field">
+                    <label for="Input_SupplierSearchLabel">Supplier master</label>
+                    <div class="supplier-master-picker">
+                        <input asp-for="Input.SupplierSearchLabel" autocomplete="off" placeholder="Search by reference or name" aria-autocomplete="list" aria-controls="supplier-master-results" />
+                        <input asp-for="Input.NwpSupplierOid" type="hidden" />
+                        <div id="supplier-master-results" class="supplier-master-results" role="listbox" hidden>
+                            @foreach (var supplier in Model.Suppliers)
+                            {
+                                <button type="button" role="option" data-value="@supplier.DisplayLabel" data-oid="@supplier.Oid">@supplier.DisplayLabel</button>
+                            }
+                        </div>
+                    </div>
                     <span asp-validation-for="Input.NwpSupplierOid" class="field-error"></span>
                     @if (!string.IsNullOrEmpty(d.DetectedSupplier))
                     {
@@ -115,7 +117,7 @@ else
                     {
                         <small class="muted">Previously recorded text: <strong>@d.SupplierMasterName</strong>. Select a live supplier to approve its identity.</small>
                     }
-                </label>
+                </div>
 
                 <label>
                     <span>Observed supplier name</span>
@@ -221,13 +223,33 @@ else
         (() => {
             const search = document.getElementById('Input_SupplierSearchLabel');
             const oid = document.getElementById('Input_NwpSupplierOid');
-            const options = [...document.querySelectorAll('#supplier-master-list option')];
-            const syncIdentity = () => {
-                const match = options.find(option => option.value === search.value);
-                oid.value = match?.dataset.oid ?? '';
+            const results = document.getElementById('supplier-master-results');
+            const options = [...results.querySelectorAll('button')];
+
+            const filter = () => {
+                const query = search.value.trim().toLowerCase();
+                oid.value = '';
+                let shown = 0;
+                for (const option of options) {
+                    const matches = query.length >= 2 && option.dataset.value.toLowerCase().includes(query) && shown < 25;
+                    option.hidden = !matches;
+                    if (matches) shown++;
+                }
+                results.hidden = shown === 0;
             };
-            search?.addEventListener('input', syncIdentity);
-            search?.addEventListener('change', syncIdentity);
+
+            search?.addEventListener('input', filter);
+            search?.addEventListener('focus', filter);
+            results?.addEventListener('click', event => {
+                const option = event.target.closest('button[data-oid]');
+                if (!option) return;
+                search.value = option.dataset.value;
+                oid.value = option.dataset.oid;
+                results.hidden = true;
+            });
+            document.addEventListener('click', event => {
+                if (!event.target.closest('.supplier-master-picker')) results.hidden = true;
+            });
         })();
     </script>
 }

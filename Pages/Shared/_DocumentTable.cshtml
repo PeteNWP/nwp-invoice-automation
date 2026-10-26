@@ -96,18 +96,13 @@ else
                             }
                         </td>
                         <td>
-                            @if (d.Status == ClassificationStatus.Exception)
-                            {
-                                <a asp-page="/Exceptions/Resolve" asp-route-id="@d.Id">Resolve</a>
-                            }
-                            else if (d.DocumentType == DocumentType.Invoice && d.Extraction is not null)
-                            {
-                                <a asp-page="/Exceptions/Resolve" asp-route-id="@d.Id">Review</a>
-                                <div class="muted">@d.Extraction.ReviewStatus</div>
-                            }
-                            else
-                            {
+                            <div class="document-row-actions">
                                 <a asp-page="/Documents/Detail" asp-route-id="@d.Id">Open</a>
+                                <a asp-page="/Exceptions/Resolve" asp-route-id="@d.Id">@(d.Status == ClassificationStatus.Exception ? "Resolve" : "Review")</a>
+                            </div>
+                            @if (d.Extraction is not null)
+                            {
+                                <div class="muted">@d.Extraction.ReviewStatus</div>
                             }
                         </td>
                     </tr>
