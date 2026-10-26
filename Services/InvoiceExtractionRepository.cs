@@ -46,7 +46,8 @@ public sealed class InvoiceExtractionRepository : IInvoiceExtractionRepository
                     UPDATE dbo.InvoiceExtraction SET SiteId=@SiteId, SupplierName=@SupplierName, InvoiceNumber=@InvoiceNumber,
                         InvoiceDate=@InvoiceDate, Reference=@Reference, Currency=@Currency, Total=@Total, Confidence=@Confidence,
                         Model=@Model, ExtractedAt=@ExtractedAt, RawResponse=@RawResponse, UpdatedAt=SYSUTCDATETIME() WHERE Id=@Id;
-                SELECT @Id, @Created;
+                SELECT @Id, @Created,
+                    CONVERT(bit, CASE WHEN @Created=1 OR NOT EXISTS (SELECT 1 FROM dbo.InvoiceExtraction WHERE Id=@Id AND ReviewStatus=2) THEN 1 ELSE 0 END);
                 """;
             await using var command = new SqlCommand(headerSql, connection, transaction);
             Add(command, "@DriveId", SqlDbType.NVarChar, 200, request.DriveId.Trim());
@@ -63,11 +64,11 @@ public sealed class InvoiceExtractionRepository : IInvoiceExtractionRepository
             Add(command, "@ExtractedAt", SqlDbType.DateTimeOffset, null, request.ExtractedAt ?? DateTimeOffset.UtcNow);
             Add(command, "@RawResponse", SqlDbType.NVarChar, -1, Clean(request.RawResponse));
 
-            long id; bool created;
+            long id; bool created; bool written;
             await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
             {
                 await reader.ReadAsync(cancellationToken);
-                id = reader.GetInt64(0); created = reader.GetBoolean(1);
+                id = reader.GetInt64(0); created = reader.GetBoolean(1); written = reader.GetBoolean(2);
             }
 
             // Approved human corrections are immutable to worker retries/reprocessing.
@@ -90,7 +91,7 @@ public sealed class InvoiceExtractionRepository : IInvoiceExtractionRepository
                 await insert.ExecuteNonQueryAsync(cancellationToken);
             }
             await transaction.CommitAsync(cancellationToken);
-            return new InvoiceExtractionResult(id, created, request.Lines.Count);
+            return new InvoiceExtractionResult(id, created, written ? request.Lines.Count : 0, written);
         }
         catch { await transaction.RollbackAsync(CancellationToken.None); throw; }
     }

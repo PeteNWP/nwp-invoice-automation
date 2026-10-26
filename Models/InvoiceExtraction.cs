@@ -93,4 +93,4 @@ public sealed class InvoiceExtractionLine
     public decimal? LineTotal { get; init; }
 }
 
-public sealed record InvoiceExtractionResult(long Id, bool Created, int LineCount);
+public sealed record InvoiceExtractionResult(long Id, bool Created, int LineCount, bool Written = true);

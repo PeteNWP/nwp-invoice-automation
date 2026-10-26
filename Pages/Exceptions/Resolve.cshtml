@@ -36,10 +36,39 @@ else
         </div>
     }
 
+    @if (!string.IsNullOrWhiteSpace(Model.ReprocessSuccess))
+    {
+        <div class="alert alert-success"><strong>Reprocessed.</strong> @Model.ReprocessSuccess</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(Model.ReprocessError))
+    {
+        <div class="alert alert-error"><strong>Reprocessing failed.</strong> @Model.ReprocessError</div>
+    }
+
     @if (!string.IsNullOrEmpty(d.ExceptionReason))
     {
         <div class="alert alert-error"><strong>Why it stopped:</strong> @d.ExceptionReason</div>
     }
+
+    <div class="card">
+        <h2>AI extraction</h2>
+        @if (d.Extraction?.ReviewStatus == ExtractionReviewStatus.Approved)
+        {
+            <p class="muted">This extraction is approved. AI reprocessing is disabled so approved human work cannot be overwritten.</p>
+        }
+        else if (string.IsNullOrWhiteSpace(d.GraphSiteId) || string.IsNullOrWhiteSpace(d.GraphDriveId) || string.IsNullOrWhiteSpace(d.GraphItemId))
+        {
+            <p class="muted">This document cannot be reprocessed because its complete SharePoint Graph identity is missing.</p>
+        }
+        else
+        {
+            <form method="post" asp-page-handler="Reprocess" asp-route-id="@d.Id">
+                @Html.AntiForgeryToken()
+                <button type="submit">Reprocess with AI</button>
+                <span class="muted">Processes only this selected PDF. The background extraction worker may remain disabled.</span>
+            </form>
+        }
+    </div>
 
     <div class="exception-resolution-workspace">
         <section class="card document-preview-panel">

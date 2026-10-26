@@ -13,20 +13,28 @@ public sealed class ResolveModel : PageModel
     private readonly INwpSupplierDirectory _supplierDirectory;
     private readonly IInvoiceExtractionRepository _extractions;
     private readonly UserAccessService _userAccess;
+    private readonly ManualInvoiceReprocessor _reprocessor;
+    private readonly ILogger<ResolveModel> _logger;
 
-    public ResolveModel(IDocumentStore docs, SupplierProfileStore profiles, INwpSupplierDirectory supplierDirectory, IInvoiceExtractionRepository extractions, UserAccessService userAccess)
+    public ResolveModel(IDocumentStore docs, SupplierProfileStore profiles, INwpSupplierDirectory supplierDirectory,
+        IInvoiceExtractionRepository extractions, UserAccessService userAccess,
+        ManualInvoiceReprocessor reprocessor, ILogger<ResolveModel> logger)
     {
         _docs = docs;
         _profiles = profiles;
         _supplierDirectory = supplierDirectory;
         _extractions = extractions;
         _userAccess = userAccess;
+        _reprocessor = reprocessor;
+        _logger = logger;
     }
 
     public CapturedDocument? Document { get; private set; }
     public IReadOnlyList<NwpSupplier> Suppliers { get; private set; } = [];
     public bool Saved { get; private set; }
     public bool Reviewed { get; private set; }
+    [TempData] public string? ReprocessSuccess { get; set; }
+    [TempData] public string? ReprocessError { get; set; }
 
     [BindProperty] public InputModel Input { get; set; } = new();
 
@@ -38,6 +46,31 @@ public sealed class ResolveModel : PageModel
         if (Document is null) return Page();
         Input = InputModel.FromDocument(Document, Suppliers);
         return Page();
+    }
+
+    public async Task<IActionResult> OnPostReprocessAsync(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await _reprocessor.ReprocessAsync(id, cancellationToken);
+            ReprocessSuccess = result.Outcome switch
+            {
+                ProcessingOutcome.Extracted => "AI reprocessing completed. The extracted fields and raw response below are fresh.",
+                ProcessingOutcome.Skipped => $"AI reprocessing completed, but classified this document as {result.ClassifiedDocumentType ?? "non-invoice"}.",
+                _ => result.Error ?? "AI reprocessing did not produce a usable invoice response."
+            };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            ReprocessError = ex.Message;
+            _logger.LogWarning(ex, "Manual AI reprocessing failed for captured document {DocumentId}.", id);
+        }
+
+        return RedirectToPage("/Exceptions/Resolve", new { id });
     }
 
     public async Task<IActionResult> OnPostAsync(Guid id, string action, CancellationToken cancellationToken)

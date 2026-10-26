@@ -75,6 +75,8 @@ builder.Services.AddHttpClient<ICopilotExtractionClient, CopilotExtractionClient
     var seconds = builder.Configuration.GetValue("CopilotExtraction:HttpTimeoutSeconds", 150);
     client.Timeout = TimeSpan.FromSeconds(Math.Max(30, seconds));
 });
+builder.Services.AddScoped<DocumentExtractionProcessor>();
+builder.Services.AddScoped<ManualInvoiceReprocessor>();
 builder.Services.AddHostedService<InvoiceProcessingWorker>();
 builder.Services.AddSingleton<SupplierProfileStore>();
 builder.Services.AddSingleton<INwpSupplierDirectory, NwpSupplierDirectory>();

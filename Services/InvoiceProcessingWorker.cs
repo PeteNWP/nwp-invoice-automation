@@ -83,9 +83,7 @@ public sealed class InvoiceProcessingWorker : BackgroundService
     {
         using var scope = _scopeFactory.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<ICapturedDocumentRepository>();
-        var graph = scope.ServiceProvider.GetRequiredService<IGraphDocumentClient>();
-        var copilot = scope.ServiceProvider.GetRequiredService<ICopilotExtractionClient>();
-        var extractions = scope.ServiceProvider.GetRequiredService<IInvoiceExtractionRepository>();
+        var processor = scope.ServiceProvider.GetRequiredService<DocumentExtractionProcessor>();
 
         var batch = await repository.ClaimForProcessingAsync(_options.BatchSize, cutoff, _options.MaxAttempts, cancellationToken);
         _state.LastCycleAtUtc = DateTimeOffset.UtcNow;
@@ -93,58 +91,31 @@ public sealed class InvoiceProcessingWorker : BackgroundService
         if (batch.Count == 0) return;
 
         _logger.LogInformation("Extraction cycle claimed {Count} document(s).", batch.Count);
-        const string model = "CopilotStudio:NWP Invoice Extraction";
 
         foreach (var candidate in batch)
         {
             try
             {
-                byte[] bytes;
-                string contentType;
-                using (var content = await graph.DownloadDriveItemAsync(
-                           candidate.SiteId ?? "", candidate.DriveId, candidate.GraphItemId,
-                           candidate.FileName, candidate.ContentType, cancellationToken))
+                var result = await processor.ProcessAsync(candidate, rejectApproved: false, cancellationToken);
+                if (result.Outcome == ProcessingOutcome.Failed)
                 {
-                    using var buffer = new MemoryStream();
-                    await content.Stream.CopyToAsync(buffer, cancellationToken);
-                    bytes = buffer.ToArray();
-                    contentType = string.IsNullOrWhiteSpace(content.ContentType) ? "application/pdf" : content.ContentType;
-                }
-
-                var json = await copilot.ExtractAsync(
-                    candidate.GraphItemId, candidate.FileName, contentType, bytes, cancellationToken);
-
-                var parsed = CopilotExtractionResponse.TryParse(
-                    json, candidate.DriveId, candidate.GraphItemId, candidate.SiteId, model);
-
-                if (parsed is null)
-                {
-                    await repository.MarkProcessedAsync(candidate.Id, ProcessingOutcome.Failed, null,
-                        "Copilot response could not be parsed as JSON.", cancellationToken);
                     _state.TotalFailed++;
                     _state.LastError = $"Unparseable response for {candidate.FileName}.";
                     _logger.LogWarning("Unparseable extraction response for {File}.", candidate.FileName);
                 }
-                else if (!parsed.LooksLikeInvoice)
+                else if (result.Outcome == ProcessingOutcome.Skipped)
                 {
-                    // A valid response that isn't an invoice (statement, ENS, acknowledgement, "other").
-                    // Record the classification; don't pollute the extraction tables.
-                    await repository.MarkProcessedAsync(candidate.Id, ProcessingOutcome.Skipped, parsed.DocumentType,
-                        null, cancellationToken);
                     _state.TotalSkipped++;
-                    _logger.LogInformation("Skipped non-invoice {File} (documentType={Type}).", candidate.FileName, parsed.DocumentType);
+                    _logger.LogInformation("Skipped non-invoice {File} (documentType={Type}).", candidate.FileName, result.ClassifiedDocumentType);
                 }
                 else
                 {
-                    await extractions.UpsertAsync(parsed.Extraction, cancellationToken);
-                    await repository.MarkProcessedAsync(candidate.Id, ProcessingOutcome.Extracted, parsed.DocumentType,
-                        null, cancellationToken);
                     _state.TotalExtracted++;
                     _state.LastExtractedFile = candidate.FileName;
                     _logger.LogInformation(
                         "Extracted {File}: supplier={Supplier} invoice={Invoice} total={Total} lines={Lines}.",
-                        candidate.FileName, parsed.Extraction.SupplierName, parsed.Extraction.InvoiceNumber,
-                        parsed.Extraction.Total, parsed.Extraction.Lines.Count);
+                        candidate.FileName, result.Extraction?.SupplierName, result.Extraction?.InvoiceNumber,
+                        result.Extraction?.Total, result.Extraction?.Lines.Count ?? 0);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
