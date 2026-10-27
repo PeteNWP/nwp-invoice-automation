@@ -38,7 +38,8 @@ public interface ICapturedDocumentRepository
 
     Task<IReadOnlyList<CapturedDocument>> GetAllAsync(CancellationToken cancellationToken);
     Task<CapturedDocument?> GetAsync(Guid id, CancellationToken cancellationToken);
-    Task ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken);
+    /// <returns>The number of other open, unreviewed documents updated when a supplier alias is taught.</returns>
+    Task<int> ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken);
     Task RecordSyncRunAsync(string syncKey, DateTimeOffset startedAt, bool succeeded, string? error, CancellationToken cancellationToken);
 
     /// <summary>

@@ -88,6 +88,9 @@ public sealed class DocumentExtractionProcessorTests
     {
         public int Downloads { get; private set; }
 
+        public Task<GraphDocumentContent> DownloadFromSharingUrlAsync(string sharingUrl, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public Task<GraphDocumentContent> DownloadDriveItemAsync(
             string siteId, string driveId, string itemId, string fileName, string? contentType = null, CancellationToken cancellationToken = default)
         {
@@ -142,7 +145,7 @@ public sealed class DocumentExtractionProcessorTests
         public Task ApplyDeltaAsync(string driveId, IReadOnlyList<CapturedDocument> upserts, IReadOnlyList<(string DriveId, string GraphItemId)> deletions, bool reconcileMissingAsDeleted, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<IReadOnlyList<CapturedDocument>> GetAllAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<CapturedDocument>>([]);
         public Task<CapturedDocument?> GetAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<CapturedDocument?>(null);
-        public Task ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<int> ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken) => Task.FromResult(0);
         public Task RecordSyncRunAsync(string syncKey, DateTimeOffset startedAt, bool succeeded, string? error, CancellationToken cancellationToken) => Task.CompletedTask;
         public Task<IReadOnlyList<ProcessingCandidate>> ClaimForProcessingAsync(int batchSize, DateOnly? cutoff, int maxAttempts, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<ProcessingCandidate>>([]);
     }

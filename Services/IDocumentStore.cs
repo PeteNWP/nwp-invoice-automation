@@ -13,5 +13,5 @@ public interface IDocumentStore
     Task<CapturedDocument?> GetAsync(Guid id, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<CapturedDocument>> ByTypeAsync(DocumentType type, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<CapturedDocument>> ByStatusAsync(ClassificationStatus status, CancellationToken cancellationToken = default);
-    Task ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken = default);
+    Task<int> ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken = default);
 }

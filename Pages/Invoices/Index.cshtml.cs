@@ -95,7 +95,7 @@ public sealed class IndexModel : PageModel
             return Page();
         }
 
-        await _docs.ResolveExceptionAsync(id, new ExceptionResolution
+        _ = await _docs.ResolveExceptionAsync(id, new ExceptionResolution
         {
             DocumentId = id,
             ResolvedBy = reviewedBy,

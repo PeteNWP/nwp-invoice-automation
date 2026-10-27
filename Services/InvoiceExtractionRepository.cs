@@ -90,6 +90,37 @@ public sealed class InvoiceExtractionRepository : IInvoiceExtractionRepository
                 AddDecimal(insert, "@LineTotal", line.LineTotal, 18, 4);
                 await insert.ExecuteNonQueryAsync(cancellationToken);
             }
+
+            // Promote a learned supplier identity for new/open invoices only. ResolvedAt and
+            // non-null identity columns protect explicit human decisions; approved/corrected
+            // extraction history is likewise immutable.
+            const string applyIdentitySql = """
+                UPDATE d
+                   SET SupplierMasterName=m.NwpSupplierName,
+                       NwpSupplierOID=m.NwpSupplierOID,
+                       NwpSupplierReference=m.NwpSupplierReference,
+                       UpdatedAt=SYSUTCDATETIME()
+                  FROM dbo.CapturedDocument d
+                  INNER JOIN dbo.SupplierIdentityMapping m
+                    ON m.NormalizedObservedSupplierName=LOWER(LTRIM(RTRIM(@SupplierName)))
+                   AND m.IsActive=1
+                 WHERE d.DriveId=@DriveId AND d.GraphItemId=@DriveItemId
+                   AND d.IsDeleted=0
+                   AND d.ResolvedAt IS NULL
+                   AND (d.ResolvedStatus IS NULL OR d.ResolvedStatus IN (0,2,4))
+                   AND d.SupplierMasterName IS NULL
+                   AND d.NwpSupplierOID IS NULL
+                   AND d.NwpSupplierReference IS NULL
+                   AND EXISTS (SELECT 1 FROM dbo.InvoiceExtraction x WHERE x.Id=@Id AND x.ReviewStatus=0);
+                """;
+            await using (var applyIdentity = new SqlCommand(applyIdentitySql, connection, transaction))
+            {
+                applyIdentity.Parameters.Add("@Id", SqlDbType.BigInt).Value = id;
+                Add(applyIdentity, "@DriveId", SqlDbType.NVarChar, 200, request.DriveId.Trim());
+                Add(applyIdentity, "@DriveItemId", SqlDbType.NVarChar, 200, request.DriveItemId.Trim());
+                Add(applyIdentity, "@SupplierName", SqlDbType.NVarChar, 300, Clean(request.SupplierName));
+                await applyIdentity.ExecuteNonQueryAsync(cancellationToken);
+            }
             await transaction.CommitAsync(cancellationToken);
             return new InvoiceExtractionResult(id, created, written ? request.Lines.Count : 0, written);
         }

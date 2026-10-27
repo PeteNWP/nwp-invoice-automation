@@ -200,7 +200,7 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
         return await reader.ReadAsync(cancellationToken) ? Map(reader) : null;
     }
 
-    public async Task ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken)
+    public async Task<int> ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE dbo.CapturedDocument SET
@@ -234,10 +234,15 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
         Add(command, "@ReviewerNote", SqlDbType.NVarChar, 1000, Clean(resolution.ResolutionNote));
         await command.ExecuteNonQueryAsync(cancellationToken);
 
+        var retroactivelyUpdated = 0;
         if (resolution.TaughtSupplierAlias && !string.IsNullOrWhiteSpace(resolution.ObservedSupplierName))
+        {
             await UpsertSupplierIdentityMappingAsync(connection, transaction, resolution, cancellationToken);
+            retroactivelyUpdated = await BackfillSupplierIdentityAsync(connection, transaction, id, resolution, cancellationToken);
+        }
 
         await transaction.CommitAsync(cancellationToken);
+        return retroactivelyUpdated;
     }
 
     private static async Task UpsertSupplierIdentityMappingAsync(SqlConnection connection, SqlTransaction transaction,
@@ -269,6 +274,38 @@ public sealed class CapturedDocumentRepository : ICapturedDocumentRepository
         Add(command, "@ObservedSenderDomain", SqlDbType.NVarChar, 255, Clean(resolution.ObservedSenderDomain));
         Add(command, "@UpdatedBy", SqlDbType.NVarChar, 320, Clean(resolution.ResolvedBy));
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static async Task<int> BackfillSupplierIdentityAsync(SqlConnection connection, SqlTransaction transaction,
+        Guid resolvedDocumentId, ExceptionResolution resolution, CancellationToken cancellationToken)
+    {
+        // ResolvedAt distinguishes a human decision from an automatically applied identity.
+        // ReviewStatus=0 protects corrected/approved extraction history, while the captured-
+        // document status filter excludes classified and ignored workflow history.
+        const string sql = """
+            UPDATE d
+               SET SupplierMasterName=@NwpSupplierName,
+                   NwpSupplierOID=@NwpSupplierOID,
+                   NwpSupplierReference=@NwpSupplierReference,
+                   UpdatedAt=SYSUTCDATETIME()
+              FROM dbo.CapturedDocument d
+              LEFT JOIN dbo.InvoiceExtraction e
+                ON e.DriveId=d.DriveId AND e.DriveItemId=d.GraphItemId
+             WHERE d.Id<>@ResolvedDocumentId
+               AND d.IsDeleted=0
+               AND d.ResolvedAt IS NULL
+               AND (d.ResolvedStatus IS NULL OR d.ResolvedStatus IN (0,2,4))
+               AND (e.Id IS NULL OR e.ReviewStatus=0)
+               AND LOWER(LTRIM(RTRIM(COALESCE(e.SupplierName,d.DetectedSupplier))))=@Normalized;
+            """;
+        await using var command = new SqlCommand(sql, connection, transaction);
+        command.Parameters.Add("@ResolvedDocumentId", SqlDbType.UniqueIdentifier).Value = resolvedDocumentId;
+        Add(command, "@Normalized", SqlDbType.NVarChar, 300,
+            SupplierIdentityMappingPolicy.Normalize(resolution.ObservedSupplierName));
+        Add(command, "@NwpSupplierOID", SqlDbType.NVarChar, 100, Clean(resolution.NwpSupplierOid));
+        Add(command, "@NwpSupplierReference", SqlDbType.NVarChar, 100, Clean(resolution.NwpSupplierReference));
+        Add(command, "@NwpSupplierName", SqlDbType.NVarChar, 300, Clean(resolution.SupplierMasterName));
+        return await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public async Task RecordSyncRunAsync(string syncKey, DateTimeOffset startedAt, bool succeeded, string? error, CancellationToken cancellationToken)

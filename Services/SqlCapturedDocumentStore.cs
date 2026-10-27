@@ -82,15 +82,14 @@ public sealed class SqlCapturedDocumentStore : IDocumentStore
     public async Task<IReadOnlyList<CapturedDocument>> ByStatusAsync(ClassificationStatus status, CancellationToken cancellationToken = default) =>
         (await AllAsync(cancellationToken)).Where(d => d.Status == status).ToList();
 
-    public async Task ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken = default)
+    public async Task<int> ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken = default)
     {
         if (UseMockSource())
         {
-            await _fallback.ResolveExceptionAsync(id, resolution, cancellationToken);
-            return;
+            return await _fallback.ResolveExceptionAsync(id, resolution, cancellationToken);
         }
 
-        await _repository.ResolveExceptionAsync(id, resolution, cancellationToken);
+        return await _repository.ResolveExceptionAsync(id, resolution, cancellationToken);
     }
 
     private async Task AttachExtractionsAsync(IReadOnlyList<CapturedDocument> documents, CancellationToken cancellationToken)

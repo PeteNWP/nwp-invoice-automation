@@ -31,12 +31,12 @@ public sealed class MockDocumentStore : IDocumentStore
     public async Task<IReadOnlyList<CapturedDocument>> ByStatusAsync(ClassificationStatus status, CancellationToken cancellationToken = default) =>
         (await AllAsync(cancellationToken)).Where(d => d.Status == status).ToList();
 
-    public async Task ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken = default)
+    public async Task<int> ResolveExceptionAsync(Guid id, ExceptionResolution resolution, CancellationToken cancellationToken = default)
     {
         var doc = await GetAsync(id, cancellationToken);
         if (doc is null)
         {
-            return;
+            return 0;
         }
 
         doc.DocumentType = resolution.DocumentType;
@@ -55,6 +55,7 @@ public sealed class MockDocumentStore : IDocumentStore
         doc.AssignedQueue = resolution.AssignedQueue;
         doc.WorkflowOwner = resolution.WorkflowOwner;
         doc.ReviewerNote = resolution.ResolutionNote;
+        return 0;
     }
 
     private static string PreviewUrl(IConfiguration configuration, string fileName, string fallbackUrl) =>

@@ -33,16 +33,18 @@ public sealed class ResolveModel : PageModel
     public IReadOnlyList<NwpSupplier> Suppliers { get; private set; } = [];
     public bool Saved { get; private set; }
     public bool Reviewed { get; private set; }
+    public int RetroactivelyUpdated { get; private set; }
     [TempData] public string? ReprocessSuccess { get; set; }
     [TempData] public string? ReprocessError { get; set; }
 
     [BindProperty] public InputModel Input { get; set; } = new();
 
-    public async Task<IActionResult> OnGetAsync(Guid id, bool saved = false, bool reviewed = false, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> OnGetAsync(Guid id, bool saved = false, bool reviewed = false, int updated = 0, CancellationToken cancellationToken = default)
     {
         await LoadAsync(id, cancellationToken);
         Saved = saved;
         Reviewed = reviewed;
+        RetroactivelyUpdated = updated;
         if (Document is null) return Page();
         Input = InputModel.FromDocument(Document, Suppliers);
         return Page();
@@ -134,8 +136,8 @@ public sealed class ResolveModel : PageModel
         };
 
         _profiles.TeachFromResolution(resolution, Document);
-        await _docs.ResolveExceptionAsync(id, resolution, cancellationToken);
-        return RedirectToPage("/Exceptions/Resolve", new { id, saved = true, reviewed = approve });
+        var updated = await _docs.ResolveExceptionAsync(id, resolution, cancellationToken);
+        return RedirectToPage("/Exceptions/Resolve", new { id, saved = true, reviewed = approve, updated });
     }
 
     private async Task LoadAsync(Guid id, CancellationToken cancellationToken)
