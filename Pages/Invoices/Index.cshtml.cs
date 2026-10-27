@@ -47,7 +47,9 @@ public sealed class IndexModel : PageModel
         var supplier = string.IsNullOrWhiteSpace(document.NwpSupplierOid)
             ? null
             : await _supplierDirectory.FindByOidAsync(document.NwpSupplierOid, cancellationToken);
-        var blockers = GetQuickApprovalBlockers(document, supplier is not null);
+        var blockers = GetQuickApprovalBlockers(document, supplier is not null).ToList();
+        if (!IsActiveQueueDocument(document))
+            blockers.Add("it is no longer awaiting review in the Invoice Queue");
         if (blockers.Count > 0)
         {
             ModelState.AddModelError(string.Empty,
@@ -60,36 +62,31 @@ public sealed class IndexModel : PageModel
         var reviewedBy = _userAccess.GetEmail(User) ?? "Demo user";
         try
         {
-            // Quick approval deliberately persists the extraction exactly as loaded. It does
-            // not correct headers or lines; corrections remain the full Review screen's job.
-            // If a prior request approved the extraction but failed before resolving the
-            // captured document, leave that immutable approval alone and finish step two.
-            if (extraction.ReviewStatus != ExtractionReviewStatus.Approved)
+            // Persist the extraction exactly as loaded through the same review repository used
+            // by the full Review screen. Corrections remain the full Review screen's job.
+            await _extractions.SaveReviewAsync(new InvoiceExtractionReview
             {
-                await _extractions.SaveReviewAsync(new InvoiceExtractionReview
+                Id = extraction.Id,
+                ExpectedRevision = expectedRevision,
+                SupplierName = extraction.SupplierName,
+                InvoiceNumber = extraction.InvoiceNumber,
+                InvoiceDate = extraction.InvoiceDate,
+                Reference = extraction.Reference,
+                Currency = extraction.Currency,
+                Total = extraction.Total,
+                ReviewedBy = reviewedBy,
+                ReviewNote = extraction.ReviewNote,
+                Approve = true,
+                Lines = extraction.Lines.Select(line => new InvoiceExtractionLineRequest
                 {
-                    Id = extraction.Id,
-                    ExpectedRevision = expectedRevision,
-                    SupplierName = extraction.SupplierName,
-                    InvoiceNumber = extraction.InvoiceNumber,
-                    InvoiceDate = extraction.InvoiceDate,
-                    Reference = extraction.Reference,
-                    Currency = extraction.Currency,
-                    Total = extraction.Total,
-                    ReviewedBy = reviewedBy,
-                    ReviewNote = extraction.ReviewNote,
-                    Approve = true,
-                    Lines = extraction.Lines.Select(line => new InvoiceExtractionLineRequest
-                    {
-                        LineNumber = line.LineNumber,
-                        Sku = line.Sku,
-                        Description = line.Description,
-                        Quantity = line.Quantity,
-                        UnitPrice = line.UnitPrice,
-                        LineTotal = line.LineTotal
-                    }).ToList()
-                }, cancellationToken);
-            }
+                    LineNumber = line.LineNumber,
+                    Sku = line.Sku,
+                    Description = line.Description,
+                    Quantity = line.Quantity,
+                    UnitPrice = line.UnitPrice,
+                    LineTotal = line.LineTotal
+                }).ToList()
+            }, cancellationToken);
         }
         catch (InvoiceExtractionConcurrencyException ex)
         {
@@ -132,6 +129,8 @@ public sealed class IndexModel : PageModel
             return blockers;
         }
 
+        if (extraction.ReviewStatus == ExtractionReviewStatus.Approved)
+            blockers.Add("the extraction is already approved");
         if (string.IsNullOrWhiteSpace(document.Subject)) blockers.Add("the subject is missing");
         if (string.IsNullOrWhiteSpace(extraction.SupplierName)) blockers.Add("the observed supplier is missing");
         if (string.IsNullOrWhiteSpace(document.NwpSupplierOid)
@@ -152,11 +151,13 @@ public sealed class IndexModel : PageModel
             .Where(IsActiveQueueDocument)
             .ToList();
 
+        var suppliers = await _supplierDirectory.GetAllAsync(cancellationToken);
+        var supplierOids = suppliers.Select(supplier => supplier.Oid).ToHashSet(StringComparer.Ordinal);
         QuickApprovalBlockers = Documents.ToDictionary(
             document => document.Id,
             document => GetQuickApprovalBlockers(document,
                 !string.IsNullOrWhiteSpace(document.NwpSupplierOid)
-                && !string.IsNullOrWhiteSpace(document.SupplierMasterName)));
+                && supplierOids.Contains(document.NwpSupplierOid)));
     }
 
     public static bool IsActiveQueueDocument(CapturedDocument document) =>

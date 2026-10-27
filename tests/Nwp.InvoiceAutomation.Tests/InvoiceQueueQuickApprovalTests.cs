@@ -72,6 +72,27 @@ public sealed class InvoiceQueueQuickApprovalTests
     }
 
     [Fact]
+    public void AlreadyApprovedExtraction_CannotBeQuickApprovedAgain()
+    {
+        var document = CompleteDocument();
+        document.Extraction = WithHeader(reviewStatus: ExtractionReviewStatus.Approved);
+
+        var blockers = IndexModel.GetQuickApprovalBlockers(document, authoritativeSupplierExists: true);
+
+        Assert.Contains("the extraction is already approved", blockers);
+    }
+
+    [Fact]
+    public void StaleSupplierOidWithoutAuthoritativeMatch_BlocksQuickApproval()
+    {
+        var document = CompleteDocument();
+
+        var blockers = IndexModel.GetQuickApprovalBlockers(document, authoritativeSupplierExists: false);
+
+        Assert.Contains("an authoritative NWP supplier mapping is missing", blockers);
+    }
+
+    [Fact]
     public void ApprovedClassifiedInvoice_MovesFromActiveQueueToReviewed()
     {
         var document = CompleteDocument();

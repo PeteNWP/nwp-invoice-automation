@@ -106,7 +106,7 @@ else
                                 <form method="post" asp-page-handler="QuickApprove" class="quick-approve-form">
                                     <input type="hidden" name="id" value="@d.Id" />
                                     <input type="hidden" name="expectedRevision" value="@(extraction!.ReviewRevision)" />
-                                    <button type="submit" class="quick-approve-button">Mark Reviewed</button>
+                                    <button type="submit" class="quick-approve-button">Quick approve</button>
                                 </form>
                             }
                             else if (!reviewComplete && blockers.Count > 0)
